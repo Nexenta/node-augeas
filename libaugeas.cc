@@ -72,7 +72,7 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     LibAugeas *obj = new LibAugeas();
 
     const char *root = NULL;
-    const char *lense_path = NULL;
+    const char *loadpath = NULL;
     unsigned int flags = 0;
 
     /* TODO: arg[0] may be an object: {
@@ -91,10 +91,10 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     }
     if (args[1]->IsString()) {
         String::Utf8Value str(args[0]);
-        lense_path = *str;
+        loadpath = *str;
     }
 
-    obj->m_aug = aug_init(root, lense_path, flags);
+    obj->m_aug = aug_init(root, loadpath, flags);
 
     if (NULL == obj->m_aug) {
         ThrowException(Exception::Error(String::New("aug_init() failed")));
