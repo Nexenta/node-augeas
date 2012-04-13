@@ -295,6 +295,7 @@ Handle<Value> LibAugeas::save(const Arguments& args)
     int rc = aug_save(obj->m_aug);
     if (0 == rc) {
         // ok
+        return scope.Close(Undefined());
     } else {
         /* TODO: error description is under /augeas/.../error
          * Example:
