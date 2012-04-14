@@ -4,4 +4,5 @@ try {
 } catch (e) {
   libaugeas = require('./libaugeas');
 }
+
 module.exports = libaugeas;

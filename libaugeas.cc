@@ -44,8 +44,19 @@ protected:
 void LibAugeas::Init(Handle<Object> target)
 {
     Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-    tpl->SetClassName(String::NewSymbol("LibAugeas"));
+    tpl->SetClassName(String::NewSymbol("Augeas"));
     tpl->InstanceTemplate()->SetInternalFieldCount(1);
+
+    NODE_DEFINE_CONSTANT(target, AUG_NONE);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NEWFILE);
+    NODE_DEFINE_CONSTANT(target, AUG_TYPE_CHECK);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_STDINC);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NOOP);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_LOAD);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_MODL_AUTOLOAD);
+    NODE_DEFINE_CONSTANT(target, AUG_ENABLE_SPAN);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_ERR_CLOSE);
 
 // I do not want copy-n-paste errors here:
 #define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(tpl, #m, m)
@@ -61,19 +72,10 @@ void LibAugeas::Init(Handle<Object> target)
     // _NEW_METHOD(insert);
     // _NEW_METHOD(match);
 
-    NODE_DEFINE_CONSTANT(target, AUG_NONE);
-    NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
-    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NEWFILE);
-    NODE_DEFINE_CONSTANT(target, AUG_TYPE_CHECK);
-    NODE_DEFINE_CONSTANT(target, AUG_NO_STDINC);
-    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NOOP);
-    NODE_DEFINE_CONSTANT(target, AUG_NO_LOAD);
-    NODE_DEFINE_CONSTANT(target, AUG_NO_MODL_AUTOLOAD);
-    NODE_DEFINE_CONSTANT(target, AUG_ENABLE_SPAN);
-    NODE_DEFINE_CONSTANT(target, AUG_NO_ERR_CLOSE);
+    Persistent<Function> constructor =
+        Persistent<Function>::New(tpl->GetFunction());
 
-    Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-    target->Set(String::NewSymbol("libaugeas"), constructor);
+    target->Set(String::NewSymbol("Augeas"), constructor);
 }
 
 Handle<Value> LibAugeas::New(const Arguments& args)
