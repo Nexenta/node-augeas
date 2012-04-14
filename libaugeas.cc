@@ -85,13 +85,14 @@ Handle<Value> LibAugeas::New(const Arguments& args)
 
     // TODO: flags are not implemented here
 
-    if (args[0]->IsString()) {
-        String::Utf8Value str(args[0]);
-        root = *str;
+    String::Utf8Value p_str(args[0]); // maybe "undefined"
+    String::Utf8Value l_str(args[1]);
+
+    if (args[0]->IsString()) { // but if defined (and is a string), use it
+        root = *p_str;
     }
     if (args[1]->IsString()) {
-        String::Utf8Value str(args[0]);
-        loadpath = *str;
+        loadpath = *l_str;
     }
 
     obj->m_aug = aug_init(root, loadpath, flags);
