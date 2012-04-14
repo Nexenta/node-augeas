@@ -39,6 +39,7 @@ protected:
     static Handle<Value> mv     (const Arguments& args);
     static Handle<Value> save   (const Arguments& args);
     static Handle<Value> nmatch (const Arguments& args);
+    static Handle<Value> load   (const Arguments& args);
 };
 
 void LibAugeas::Init(Handle<Object> target)
@@ -67,6 +68,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(mv);
     _NEW_METHOD(save);
     _NEW_METHOD(nmatch);
+    _NEW_METHOD(load);
 
     //TODO:
     // _NEW_METHOD(insert);
@@ -345,6 +347,34 @@ Handle<Value> LibAugeas::nmatch(const Arguments& args)
     }
 }
 
+/*
+ * Wrapper of aug_load() - load /files
+ */
+Handle<Value> LibAugeas::load(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 0) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    int rc = aug_load(obj->m_aug);
+    if (0 == rc) {
+        // ok
+        return scope.Close(Undefined());
+    } else {
+        /* TODO: error description is under /augeas/.../error
+         * Example:
+         * /augeas/files/etc/hosts/error = "open_augnew"
+         * /augeas/files/etc/hosts/error/message = "No such file or directory"
+         */
+        ThrowException(Exception::Error(String::New("Failed to load files")));
+        return scope.Close(Undefined());
+    }
+}
 
 LibAugeas::LibAugeas() : m_aug(NULL)
 {
