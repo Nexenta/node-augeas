@@ -61,6 +61,17 @@ void LibAugeas::Init(Handle<Object> target)
     // _NEW_METHOD(insert);
     // _NEW_METHOD(match);
 
+    NODE_DEFINE_CONSTANT(target, AUG_NONE);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NEWFILE);
+    NODE_DEFINE_CONSTANT(target, AUG_TYPE_CHECK);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_STDINC);
+    NODE_DEFINE_CONSTANT(target, AUG_SAVE_NOOP);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_LOAD);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_MODL_AUTOLOAD);
+    NODE_DEFINE_CONSTANT(target, AUG_ENABLE_SPAN);
+    NODE_DEFINE_CONSTANT(target, AUG_NO_ERR_CLOSE);
+
     Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
     target->Set(String::NewSymbol("libaugeas"), constructor);
 }
@@ -75,24 +86,17 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     const char *loadpath = NULL;
     unsigned int flags = 0;
 
-    /* TODO: arg[0] may be an object: {
-     * root: "/some/root";
-     * loadpath: "/where:/to/search:/lenses";
-     * flags: ???
-     * }
-     * All members are optional.
-     */
 
-    // TODO: flags are not implemented here
-
-    String::Utf8Value p_str(args[0]); // maybe "undefined"
-    String::Utf8Value l_str(args[1]);
-
-    if (args[0]->IsString()) { // but if defined (and is a string), use it
+    if (args[0]->IsString()) {
+        String::Utf8Value p_str(args[0]);
         root = *p_str;
     }
     if (args[1]->IsString()) {
+        String::Utf8Value l_str(args[1]);
         loadpath = *l_str;
+    }
+    if (args[2]->IsNumber()) {
+        flags = args[2]->Int32Value();
     }
 
     obj->m_aug = aug_init(root, loadpath, flags);
