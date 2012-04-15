@@ -9,6 +9,9 @@
  * http://www.opensource.org/licenses/CDDL-1.0
  */
 
+#include <string>
+#include <map>
+#include <libgen.h>
 
 #define BUILDING_NODE_EXTENSION
 
@@ -32,14 +35,16 @@ protected:
 
     static Handle<Value> New(const Arguments& args);
 
-    static Handle<Value> get    (const Arguments& args);
-    static Handle<Value> set    (const Arguments& args);
-    static Handle<Value> setm   (const Arguments& args);
-    static Handle<Value> rm     (const Arguments& args);
-    static Handle<Value> mv     (const Arguments& args);
-    static Handle<Value> save   (const Arguments& args);
-    static Handle<Value> nmatch (const Arguments& args);
-    static Handle<Value> load   (const Arguments& args);
+    static Handle<Value> get        (const Arguments& args);
+    static Handle<Value> set        (const Arguments& args);
+    static Handle<Value> setm       (const Arguments& args);
+    static Handle<Value> rm         (const Arguments& args);
+    static Handle<Value> mv         (const Arguments& args);
+    static Handle<Value> save       (const Arguments& args);
+    static Handle<Value> nmatch     (const Arguments& args);
+    static Handle<Value> load       (const Arguments& args);
+    static Handle<Value> loadFile   (const Arguments& args);
+    static Handle<Value> saveFile   (const Arguments& args);
 };
 
 void LibAugeas::Init(Handle<Object> target)
@@ -69,6 +74,8 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(save);
     _NEW_METHOD(nmatch);
     _NEW_METHOD(load);
+    _NEW_METHOD(loadFile);
+    _NEW_METHOD(saveFile);
 
     //TODO:
     // _NEW_METHOD(insert);
@@ -86,10 +93,9 @@ Handle<Value> LibAugeas::New(const Arguments& args)
 
     LibAugeas *obj = new LibAugeas();
 
-    const char *root = NULL;
-    const char *loadpath = NULL;
+    std::string root;
+    std::string loadpath;
     unsigned int flags = 0;
-
 
     if (args[0]->IsString()) {
         String::Utf8Value p_str(args[0]);
@@ -103,7 +109,8 @@ Handle<Value> LibAugeas::New(const Arguments& args)
         flags = args[2]->Int32Value();
     }
 
-    obj->m_aug = aug_init(root, loadpath, flags);
+    obj->m_aug = aug_init(root.length() ? root.c_str() : NULL,
+			  loadpath.length() ? loadpath.c_str() : NULL, flags);
 
     if (NULL == obj->m_aug) {
         ThrowException(Exception::Error(String::New("aug_init() failed")));
@@ -374,6 +381,332 @@ Handle<Value> LibAugeas::load(const Arguments& args)
         ThrowException(Exception::Error(String::New("Failed to load files")));
         return scope.Close(Undefined());
     }
+}
+
+struct LoadFileUV {
+    uv_work_t request;
+    Persistent<Function> callback;
+    std::string lens;
+    std::string incl;
+    augeas *m_aug;
+    int ret;
+    std::string msg;
+    std::map<std::string,std::string> msgMap;
+};
+
+void blockingLoadFile(uv_work_t * req)
+{
+    char **matches;
+    const char *val;
+    int mres;
+    LoadFileUV *lfuv = (LoadFileUV *) req->data;
+
+    std::string basePath = "/augeas/load/" + lfuv->lens;
+    std::string lensPath = basePath + "/lens";
+    std::string inclPath = basePath + "/incl";
+    std::string lensVal = lfuv->lens + ".lns";
+
+    lfuv->ret = aug_set(lfuv->m_aug, lensPath.c_str(), lensVal.c_str());
+    if (lfuv->ret != 0) {
+        lfuv->msg = "Cannot set lens";
+        return;
+    }
+
+    lfuv->ret = aug_set(lfuv->m_aug, inclPath.c_str(), lfuv->incl.c_str());
+    if (lfuv->ret != 0) {
+        lfuv->msg = "Cannot set file";
+        return;
+    }
+
+    lfuv->ret = aug_load(lfuv->m_aug);
+    if (lfuv->ret != 0) {
+        lfuv->msg = "Cannot load provided lens or file";
+        return;
+    }
+    std::string errPath = "/augeas/load/" + lfuv->lens + "/error";
+    if (aug_get(lfuv->m_aug, errPath.c_str(), &val)) {
+        lfuv->ret = -1;
+        lfuv->msg = val;
+        return;
+    }
+
+    errPath = "/augeas/files" + lfuv->incl + "/error";
+    mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
+    if (mres) {
+        if (aug_get(lfuv->m_aug,
+		    std::string(errPath + "/line").c_str(), &val)) {
+		lfuv->msg = lfuv->incl + ":" + val;
+	}
+        if (aug_get(lfuv->m_aug,
+		    std::string(errPath + "/message").c_str(), &val)) {
+		lfuv->msg = lfuv->msg + ": " + val;
+	}
+	lfuv->ret = -1;
+	free(matches);
+	return;
+    }
+
+    std::string matchPath = "/files" + lfuv->incl + "/*";
+    FILE *out = tmpfile();
+    char line[256];
+    aug_print(lfuv->m_aug, out, matchPath.c_str());
+    rewind(out);
+    while(fgets(line, 256, out) != NULL) {
+        // remove end of line
+        line[strlen(line) - 1] = '\0';
+        std::string s = line;;
+        // skip comments
+	if (s.find("#comment") != std::string::npos)
+            continue;
+	s = s.substr(matchPath.length() - 1);
+        // split by '=' sign
+	size_t eqpos = s.find(" = ");
+	if (eqpos == std::string::npos)
+            continue;
+        // extract key and value
+	std::string key = s.substr(0, eqpos);
+	std::string value = s.substr(eqpos + 3);
+        // remove '"' sign from around value
+	value.erase(value.begin());
+	value.erase(value.end() - 1);
+	lfuv->msgMap[key] = value;
+    }
+    fclose(out);
+    lfuv->ret = 0;
+}
+
+void afterLoadFile(uv_work_t *req)
+{
+    HandleScope scope;
+    LoadFileUV *lfuv = (LoadFileUV *) req->data;
+
+    if(lfuv->ret != 0) {
+        Local<Value> argv[] =  {
+            Local<Value>::New(Integer::New(lfuv->ret)),
+            Local<Value>::New(String::New(lfuv->msg.c_str()))
+        };
+
+        TryCatch try_catch;
+        lfuv->callback->Call(Context::GetCurrent()->Global(), 2, argv);
+        if (try_catch.HasCaught()) {
+            node::FatalException(try_catch);
+        }
+    } else {
+        std::map<std::string,std::string>::iterator it;
+        Local<Object> obj = Object::New();
+
+        for (it = lfuv->msgMap.begin(); it != lfuv->msgMap.end(); it++) {
+            obj->Set(Local<String>::New(String::New((*it).first.c_str())),
+                     Local<String>::New(String::New((*it).second.c_str())));
+        }
+        Local<Value> argv[] =  {
+            Local<Value>::New(Integer::New(lfuv->ret)),
+	    obj
+        };
+
+        TryCatch try_catch;
+        lfuv->callback->Call(Context::GetCurrent()->Global(), 2, argv);
+        if (try_catch.HasCaught()) {
+            node::FatalException(try_catch);
+        }
+    }
+
+    lfuv->callback.Dispose();
+    delete lfuv;
+
+    scope.Close(Undefined());
+}
+
+/*
+ * Asyncrhonous load of lens and conf file. Aggregation of
+ * set lens, set incl, load and get
+ */
+Handle<Value> LibAugeas::loadFile(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (!args[0]->IsObject() || !args[1]->IsFunction())
+        return (ThrowException(Exception::TypeError(
+                                    String::New("Bad arguments"))));
+
+    LibAugeas *augobj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    Local<Object> obj = args[0]->ToObject();
+    String::Utf8Value lens(obj->Get(Local<String>(String::New("lens"))));
+    String::Utf8Value incl(obj->Get(Local<String>(String::New("file"))));
+    Local<Function> callback = Local<Function>::Cast(args[1]);
+
+    LoadFileUV *lfuv = new LoadFileUV();
+    lfuv->request.data = lfuv;
+    lfuv->callback = Persistent<Function>::New(callback);
+    lfuv->m_aug = augobj->m_aug;
+    lfuv->lens = *lens;
+    lfuv->incl = *incl;
+
+    assert(uv_queue_work(uv_default_loop(), &lfuv->request,
+           blockingLoadFile, afterLoadFile) == 0);
+
+    return scope.Close(Undefined());
+}
+
+struct SaveFileUV {
+    uv_work_t request;
+    Persistent<Function> callback;
+    std::map<std::string,std::string> valMap;
+    std::string lens;
+    std::string incl;
+    augeas *m_aug;
+    int ret;
+    std::string msg;
+};
+
+void blockingSaveFile(uv_work_t * req)
+{
+    char **matches;
+    const char *val;
+    int mres;
+    SaveFileUV *lfuv = (SaveFileUV *) req->data;
+
+    std::string basePath = "/augeas/load/" + lfuv->lens;
+    std::string lensPath = basePath + "/lens";
+    std::string inclPath = basePath + "/incl";
+    std::string lensVal = lfuv->lens + ".lns";
+    std::string filesPath = "/files" + lfuv->incl;
+
+    mres = aug_match(lfuv->m_aug, inclPath.c_str(), &matches);
+    if (!mres) {
+
+        lfuv->ret = aug_set(lfuv->m_aug, lensPath.c_str(), lensVal.c_str());
+        if (lfuv->ret != 0) {
+            lfuv->msg = "Cannot set lens";
+            return;
+        }
+
+        lfuv->ret = aug_set(lfuv->m_aug, inclPath.c_str(), lfuv->incl.c_str());
+        if (lfuv->ret != 0) {
+            lfuv->msg = "Cannot set file";
+            return;
+        }
+
+        lfuv->ret = aug_load(lfuv->m_aug);
+        if (lfuv->ret != 0) {
+            lfuv->msg = "Cannot load provided lens or file";
+            return;
+        }
+        std::string errPath = "/augeas/load/" + lfuv->lens + "/error";
+        if (aug_get(lfuv->m_aug, errPath.c_str(), &val)) {
+            lfuv->ret = -1;
+            lfuv->msg = val;
+            return;
+        }
+
+        errPath = "/augeas" + filesPath + "/error";
+        mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
+        if (mres) {
+            if (aug_get(lfuv->m_aug,
+                std::string(errPath + "/line").c_str(), &val)) {
+	        lfuv->msg = lfuv->incl + ":" + val;
+            }
+            if (aug_get(lfuv->m_aug,
+	        std::string(errPath + "/message").c_str(), &val)) {
+	        lfuv->msg = lfuv->msg + ": " + val;
+            }
+            lfuv->ret = -1;
+            free(matches);
+            return;
+        }
+    }
+
+    std::map<std::string,std::string>::iterator it;
+
+    for (it = lfuv->valMap.begin(); it != lfuv->valMap.end(); it++) {
+        std::string path = filesPath + "/" + (*it).first;
+        lfuv->ret = aug_set(lfuv->m_aug, path.c_str(), (*it).second.c_str());
+        if (lfuv->ret != 0) {
+            lfuv->msg = "Cannot set file";
+            return;
+        }
+    }
+
+    lfuv->ret = aug_save(lfuv->m_aug);
+    if (lfuv->ret != 0) {
+        std::string errPath = "/augeas" + filesPath + "/error";
+        if (aug_get(lfuv->m_aug,
+            std::string(errPath + "/line").c_str(), &val)) {
+            lfuv->msg = lfuv->incl + ":" + val;
+        }
+        if (aug_get(lfuv->m_aug,
+            std::string(errPath + "/message").c_str(), &val)) {
+            lfuv->msg = lfuv->msg + ": " + val;
+        }
+        lfuv->ret = -1;
+        return;
+    }
+
+    lfuv->ret = 0;
+}
+
+void afterSaveFile(uv_work_t *req)
+{
+    HandleScope scope;
+    SaveFileUV *lfuv = (SaveFileUV *) req->data;
+
+    Local<Value> argv[] =  {
+        Local<Value>::New(Integer::New(lfuv->ret)),
+        Local<Value>::New(String::New(lfuv->msg.c_str()))
+    };
+
+    TryCatch try_catch;
+    lfuv->callback->Call(Context::GetCurrent()->Global(), 2, argv);
+    if (try_catch.HasCaught()) {
+        node::FatalException(try_catch);
+    }
+
+    lfuv->callback.Dispose();
+    delete lfuv;
+
+    scope.Close(Undefined());
+}
+
+/*
+ * Asyncrhonous save of conf file. Aggregation of set values and save
+ */
+Handle<Value> LibAugeas::saveFile(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (!args[0]->IsObject() || !args[1]->IsObject() || !args[2]->IsFunction())
+        return (ThrowException(Exception::TypeError(
+                                    String::New("Bad arguments"))));
+
+    LibAugeas *augobj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    Local<Object> obj = args[0]->ToObject();
+    String::Utf8Value lens(obj->Get(Local<String>(String::New("lens"))));
+    String::Utf8Value incl(obj->Get(Local<String>(String::New("file"))));
+
+    Local<Object> setObj = args[1]->ToObject();
+
+    Local<Function> callback = Local<Function>::Cast(args[2]);
+
+    SaveFileUV *lfuv = new SaveFileUV();
+    lfuv->request.data = lfuv;
+    lfuv->callback = Persistent<Function>::New(callback);
+    lfuv->m_aug = augobj->m_aug;
+    lfuv->lens = *lens;
+    lfuv->incl = *incl;
+
+    Local<Array> propertyNames = setObj->GetPropertyNames();
+    for (int i = 0; i < propertyNames->Length(); i++) {
+        Local<Value> propKey = propertyNames->Get(Int32::New(i));
+	String::Utf8Value key(propKey);
+        String::Utf8Value value(setObj->Get(propKey));
+	lfuv->valMap[*key] = *value;
+    }
+
+    assert(uv_queue_work(uv_default_loop(), &lfuv->request,
+           blockingSaveFile, afterSaveFile) == 0);
+
+    return scope.Close(Undefined());
 }
 
 LibAugeas::LibAugeas() : m_aug(NULL)
