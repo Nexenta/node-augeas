@@ -12,6 +12,7 @@
 #include <string>
 #include <map>
 #include <libgen.h>
+#include <string.h>
 
 #define BUILDING_NODE_EXTENSION
 
