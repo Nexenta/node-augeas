@@ -46,6 +46,7 @@ protected:
     static Handle<Value> load       (const Arguments& args);
     static Handle<Value> loadFile   (const Arguments& args);
     static Handle<Value> saveFile   (const Arguments& args);
+    static Handle<Value> insert     (const Arguments& args);
 };
 
 void LibAugeas::Init(Handle<Object> target)
@@ -77,9 +78,9 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(load);
     _NEW_METHOD(loadFile);
     _NEW_METHOD(saveFile);
+    _NEW_METHOD(insert);
 
     //TODO:
-    // _NEW_METHOD(insert);
     // _NEW_METHOD(match);
 
     Persistent<Function> constructor =
@@ -291,6 +292,43 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
         return scope.Close(Undefined());
     }
 }
+
+/* 
+ * Wrapper of aug_insert() - insert node
+ * The third argument (args[2]) is optional boolean, and is False by default.
+ */
+Handle<Value> LibAugeas::insert(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() < 2 || args.Length() > 3) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value p_str(args[0]);
+    String::Utf8Value l_str(args[1]);
+
+    const char *path  = *p_str;
+    const char *label = *l_str;
+
+    /*
+     * inserting into the tree just before path if 1,
+     * or just after path if 0
+     */
+    int before = args[2]->ToBoolean()->Value() ? 1 : 0;
+
+    int rc = aug_insert(obj->m_aug, path, label, before);
+    if (0 == rc) {
+        return scope.Close(Number::New(rc));
+    } else {
+        ThrowException(Exception::Error(String::New("aug_insert() failed")));
+        return scope.Close(Undefined());
+    }
+}
+
+
 /*
  * Wrapper of aug_save() - save changed files
  * TODO: The exact behavior of aug_save can be
