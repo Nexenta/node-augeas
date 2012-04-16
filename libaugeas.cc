@@ -735,7 +735,7 @@ Handle<Value> LibAugeas::saveFile(const Arguments& args)
     lfuv->incl = *incl;
 
     Local<Array> propertyNames = setObj->GetPropertyNames();
-    for (size_t i = 0; i < propertyNames->Length(); i++) {
+    for (uint32_t i = 0; i < propertyNames->Length(); i++) {
         Local<Value> propKey = propertyNames->Get(Int32::New(i));
         String::Utf8Value key(propKey);
         String::Utf8Value value(setObj->Get(propKey));
