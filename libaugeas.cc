@@ -112,7 +112,7 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     }
 
     obj->m_aug = aug_init(root.length() ? root.c_str() : NULL,
-			  loadpath.length() ? loadpath.c_str() : NULL, flags);
+                          loadpath.length() ? loadpath.c_str() : NULL, flags);
 
     if (NULL == obj->m_aug) {
         ThrowException(Exception::Error(String::New("aug_init() failed")));
@@ -293,7 +293,7 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
     }
 }
 
-/* 
+/*
  * Wrapper of aug_insert() - insert node
  * The third argument (args[2]) is optional boolean, and is False by default.
  */
@@ -473,16 +473,16 @@ void blockingLoadFile(uv_work_t * req)
     mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
     if (mres) {
         if (aug_get(lfuv->m_aug,
-		    std::string(errPath + "/line").c_str(), &val)) {
-		lfuv->msg = lfuv->incl + ":" + val;
-	}
+                    std::string(errPath + "/line").c_str(), &val)) {
+            lfuv->msg = lfuv->incl + ":" + val;
+        }
         if (aug_get(lfuv->m_aug,
-		    std::string(errPath + "/message").c_str(), &val)) {
-		lfuv->msg = lfuv->msg + ": " + val;
-	}
-	lfuv->ret = -1;
-	free(matches);
-	return;
+                    std::string(errPath + "/message").c_str(), &val)) {
+            lfuv->msg = lfuv->msg + ": " + val;
+        }
+        lfuv->ret = -1;
+        free(matches);
+        return;
     }
 
     std::string matchPath = "/files" + lfuv->incl + "/*";
@@ -490,25 +490,25 @@ void blockingLoadFile(uv_work_t * req)
     char line[256];
     aug_print(lfuv->m_aug, out, matchPath.c_str());
     rewind(out);
-    while(fgets(line, 256, out) != NULL) {
+    while (fgets(line, 256, out) != NULL) {
         // remove end of line
         line[strlen(line) - 1] = '\0';
         std::string s = line;;
         // skip comments
-	if (s.find("#comment") != std::string::npos)
+        if (s.find("#comment") != std::string::npos)
             continue;
-	s = s.substr(matchPath.length() - 1);
+        s = s.substr(matchPath.length() - 1);
         // split by '=' sign
-	size_t eqpos = s.find(" = ");
-	if (eqpos == std::string::npos)
+        size_t eqpos = s.find(" = ");
+        if (eqpos == std::string::npos)
             continue;
         // extract key and value
-	std::string key = s.substr(0, eqpos);
-	std::string value = s.substr(eqpos + 3);
+        std::string key = s.substr(0, eqpos);
+        std::string value = s.substr(eqpos + 3);
         // remove '"' sign from around value
-	value.erase(value.begin());
-	value.erase(value.end() - 1);
-	lfuv->msgMap[key] = value;
+        value.erase(value.begin());
+        value.erase(value.end() - 1);
+        lfuv->msgMap[key] = value;
     }
     fclose(out);
     lfuv->ret = 0;
@@ -519,7 +519,7 @@ void afterLoadFile(uv_work_t *req)
     HandleScope scope;
     LoadFileUV *lfuv = (LoadFileUV *) req->data;
 
-    if(lfuv->ret != 0) {
+    if (lfuv->ret != 0) {
         Local<Value> argv[] =  {
             Local<Value>::New(Integer::New(lfuv->ret)),
             Local<Value>::New(String::New(lfuv->msg.c_str()))
@@ -540,7 +540,7 @@ void afterLoadFile(uv_work_t *req)
         }
         Local<Value> argv[] =  {
             Local<Value>::New(Integer::New(lfuv->ret)),
-	    obj
+            obj
         };
 
         TryCatch try_catch;
@@ -566,7 +566,7 @@ Handle<Value> LibAugeas::loadFile(const Arguments& args)
 
     if (!args[0]->IsObject() || !args[1]->IsFunction())
         return (ThrowException(Exception::TypeError(
-                                    String::New("Bad arguments"))));
+                                   String::New("Bad arguments"))));
 
     LibAugeas *augobj = ObjectWrap::Unwrap<LibAugeas>(args.This());
     Local<Object> obj = args[0]->ToObject();
@@ -582,7 +582,7 @@ Handle<Value> LibAugeas::loadFile(const Arguments& args)
     lfuv->incl = *incl;
 
     assert(uv_queue_work(uv_default_loop(), &lfuv->request,
-           blockingLoadFile, afterLoadFile) == 0);
+                         blockingLoadFile, afterLoadFile) == 0);
 
     return scope.Close(Undefined());
 }
@@ -642,12 +642,12 @@ void blockingSaveFile(uv_work_t * req)
         mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
         if (mres) {
             if (aug_get(lfuv->m_aug,
-                std::string(errPath + "/line").c_str(), &val)) {
-	        lfuv->msg = lfuv->incl + ":" + val;
+                        std::string(errPath + "/line").c_str(), &val)) {
+                lfuv->msg = lfuv->incl + ":" + val;
             }
             if (aug_get(lfuv->m_aug,
-	        std::string(errPath + "/message").c_str(), &val)) {
-	        lfuv->msg = lfuv->msg + ": " + val;
+                        std::string(errPath + "/message").c_str(), &val)) {
+                lfuv->msg = lfuv->msg + ": " + val;
             }
             lfuv->ret = -1;
             free(matches);
@@ -670,11 +670,11 @@ void blockingSaveFile(uv_work_t * req)
     if (lfuv->ret != 0) {
         std::string errPath = "/augeas" + filesPath + "/error";
         if (aug_get(lfuv->m_aug,
-            std::string(errPath + "/line").c_str(), &val)) {
+                    std::string(errPath + "/line").c_str(), &val)) {
             lfuv->msg = lfuv->incl + ":" + val;
         }
         if (aug_get(lfuv->m_aug,
-            std::string(errPath + "/message").c_str(), &val)) {
+                    std::string(errPath + "/message").c_str(), &val)) {
             lfuv->msg = lfuv->msg + ": " + val;
         }
         lfuv->ret = -1;
@@ -715,7 +715,7 @@ Handle<Value> LibAugeas::saveFile(const Arguments& args)
 
     if (!args[0]->IsObject() || !args[1]->IsObject() || !args[2]->IsFunction())
         return (ThrowException(Exception::TypeError(
-                                    String::New("Bad arguments"))));
+                                   String::New("Bad arguments"))));
 
     LibAugeas *augobj = ObjectWrap::Unwrap<LibAugeas>(args.This());
 
@@ -737,13 +737,13 @@ Handle<Value> LibAugeas::saveFile(const Arguments& args)
     Local<Array> propertyNames = setObj->GetPropertyNames();
     for (int i = 0; i < propertyNames->Length(); i++) {
         Local<Value> propKey = propertyNames->Get(Int32::New(i));
-	String::Utf8Value key(propKey);
+        String::Utf8Value key(propKey);
         String::Utf8Value value(setObj->Get(propKey));
-	lfuv->valMap[*key] = *value;
+        lfuv->valMap[*key] = *value;
     }
 
     assert(uv_queue_work(uv_default_loop(), &lfuv->request,
-           blockingSaveFile, afterSaveFile) == 0);
+                         blockingSaveFile, afterSaveFile) == 0);
 
     return scope.Close(Undefined());
 }
