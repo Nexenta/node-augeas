@@ -435,7 +435,6 @@ struct LoadFileUV {
 
 void blockingLoadFile(uv_work_t * req)
 {
-    char **matches;
     const char *val;
     int mres;
     LoadFileUV *lfuv = (LoadFileUV *) req->data;
@@ -470,7 +469,7 @@ void blockingLoadFile(uv_work_t * req)
     }
 
     errPath = "/augeas/files" + lfuv->incl + "/error";
-    mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
+    mres = aug_match(lfuv->m_aug, errPath.c_str(), NULL);
     if (mres) {
         if (aug_get(lfuv->m_aug,
                     std::string(errPath + "/line").c_str(), &val)) {
@@ -481,7 +480,6 @@ void blockingLoadFile(uv_work_t * req)
             lfuv->msg = lfuv->msg + ": " + val;
         }
         lfuv->ret = -1;
-        free(matches);
         return;
     }
 
@@ -600,7 +598,6 @@ struct SaveFileUV {
 
 void blockingSaveFile(uv_work_t * req)
 {
-    char **matches;
     const char *val;
     int mres;
     SaveFileUV *lfuv = (SaveFileUV *) req->data;
@@ -611,7 +608,7 @@ void blockingSaveFile(uv_work_t * req)
     std::string lensVal = lfuv->lens + ".lns";
     std::string filesPath = "/files" + lfuv->incl;
 
-    mres = aug_match(lfuv->m_aug, inclPath.c_str(), &matches);
+    mres = aug_match(lfuv->m_aug, inclPath.c_str(), NULL);
     if (!mres) {
 
         lfuv->ret = aug_set(lfuv->m_aug, lensPath.c_str(), lensVal.c_str());
@@ -639,7 +636,7 @@ void blockingSaveFile(uv_work_t * req)
         }
 
         errPath = "/augeas" + filesPath + "/error";
-        mres = aug_match(lfuv->m_aug, errPath.c_str(), &matches);
+        mres = aug_match(lfuv->m_aug, errPath.c_str(), NULL);
         if (mres) {
             if (aug_get(lfuv->m_aug,
                         std::string(errPath + "/line").c_str(), &val)) {
@@ -650,7 +647,6 @@ void blockingSaveFile(uv_work_t * req)
                 lfuv->msg = lfuv->msg + ": " + val;
             }
             lfuv->ret = -1;
-            free(matches);
             return;
         }
     }
