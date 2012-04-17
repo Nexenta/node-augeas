@@ -532,7 +532,7 @@ void afterLoadFile(uv_work_t *req)
         std::map<std::string,std::string>::iterator it;
         Local<Object> obj = Object::New();
 
-        for (it = lfuv->msgMap.begin(); it != lfuv->msgMap.end(); it++) {
+        for (it = lfuv->msgMap.begin(); it != lfuv->msgMap.end(); ++it) {
             obj->Set(Local<String>::New(String::New((*it).first.c_str())),
                      Local<String>::New(String::New((*it).second.c_str())));
         }
@@ -653,7 +653,7 @@ void blockingSaveFile(uv_work_t * req)
 
     std::map<std::string,std::string>::iterator it;
 
-    for (it = lfuv->valMap.begin(); it != lfuv->valMap.end(); it++) {
+    for (it = lfuv->valMap.begin(); it != lfuv->valMap.end(); ++it) {
         std::string path = filesPath + "/" + (*it).first;
         lfuv->ret = aug_set(lfuv->m_aug, path.c_str(), (*it).second.c_str());
         if (lfuv->ret != 0) {
