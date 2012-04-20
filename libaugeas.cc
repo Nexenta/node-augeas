@@ -143,6 +143,14 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     return args.This();
 }
 
+inline void throw_aug_error_msg(augeas *aug)
+{
+    std::string msg = aug_error_message(aug);
+    msg += ": ";
+    msg += aug_error_minor_message(aug);
+    ThrowException(Exception::Error(String::New(msg.c_str())));
+}
+
 /*
  * Wrapper of aug_get() - get exactly one value
  */
@@ -177,6 +185,7 @@ Handle<Value> LibAugeas::get(const Arguments& args)
     } else if (0 == rc) {
         return scope.Close(Undefined());
     } else if (rc < 0) {
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     } else {
         ThrowException(Exception::Error(String::New("Unexpected return value of aug_get()")));
@@ -213,7 +222,7 @@ Handle<Value> LibAugeas::set(const Arguments& args)
     if (0 == rc) {
         return scope.Close(Undefined());
     } else {
-        ThrowException(Exception::Error(String::New("aug_set() failed")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 }
@@ -245,7 +254,7 @@ Handle<Value> LibAugeas::setm(const Arguments& args)
     if (rc >= 0) {
         return scope.Close(Number::New(rc));
     } else {
-        ThrowException(Exception::Error(String::New("aug_setm() failed")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 }
@@ -274,7 +283,7 @@ Handle<Value> LibAugeas::rm(const Arguments& args)
     if (rc >= 0) {
         return scope.Close(Number::New(rc));
     } else {
-        ThrowException(Exception::Error(String::New("Failed to remove node")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 
@@ -307,7 +316,7 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
     if (0 == rc) {
         return scope.Close(Undefined());
     } else {
-        ThrowException(Exception::Error(String::New("aug_mv() failed")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 }
@@ -342,7 +351,7 @@ Handle<Value> LibAugeas::insert(const Arguments& args)
     if (0 == rc) {
         return scope.Close(Number::New(rc));
     } else {
-        ThrowException(Exception::Error(String::New("aug_insert() failed")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 }
@@ -425,7 +434,7 @@ Handle<Value> LibAugeas::nmatch(const Arguments& args)
     if (rc >= 0) {
         return scope.Close(Number::New(rc));
     } else {
-        ThrowException(Exception::Error(String::New("aug_match() failed")));
+        throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
 }
