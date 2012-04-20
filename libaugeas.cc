@@ -25,6 +25,16 @@ extern "C" { // Yes, that bad
 
 using namespace v8;
 
+
+inline void throw_aug_error_msg(augeas *aug)
+{
+    std::string msg = aug_error_message(aug);
+    msg += ": ";
+    msg += aug_error_minor_message(aug);
+    ThrowException(Exception::Error(String::New(msg.c_str())));
+}
+
+
 class LibAugeas : public node::ObjectWrap {
 public:
     static void Init(Handle<Object> target);
@@ -133,22 +143,22 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     obj->m_aug = aug_init(root.length() ? root.c_str() : NULL,
                           loadpath.length() ? loadpath.c_str() : NULL, flags);
 
+    /*
+     * If flags have AUG_NO_ERR_CLOSE aug_init() might return non-null
+     * augeas handle which can be used to get error code and message.
+     */
     if (NULL == obj->m_aug) {
         ThrowException(Exception::Error(String::New("aug_init() failed")));
+        return scope.Close(Undefined());
+    } else if (AUG_NOERROR != aug_error(obj->m_aug)) {
+        throw_aug_error_msg(obj->m_aug);
+        aug_close(obj->m_aug);
         return scope.Close(Undefined());
     }
 
     obj->Wrap(args.This());
 
     return args.This();
-}
-
-inline void throw_aug_error_msg(augeas *aug)
-{
-    std::string msg = aug_error_message(aug);
-    msg += ": ";
-    msg += aug_error_minor_message(aug);
-    ThrowException(Exception::Error(String::New(msg.c_str())));
 }
 
 /*
