@@ -47,6 +47,7 @@ protected:
     static Handle<Value> loadFile   (const Arguments& args);
     static Handle<Value> saveFile   (const Arguments& args);
     static Handle<Value> insert     (const Arguments& args);
+    static Handle<Value> error      (const Arguments& args);
 };
 
 void LibAugeas::Init(Handle<Object> target)
@@ -55,6 +56,7 @@ void LibAugeas::Init(Handle<Object> target)
     tpl->SetClassName(String::NewSymbol("Augeas"));
     tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
+    // flags for aug_init():
     NODE_DEFINE_CONSTANT(target, AUG_NONE);
     NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
     NODE_DEFINE_CONSTANT(target, AUG_SAVE_NEWFILE);
@@ -65,6 +67,22 @@ void LibAugeas::Init(Handle<Object> target)
     NODE_DEFINE_CONSTANT(target, AUG_NO_MODL_AUTOLOAD);
     NODE_DEFINE_CONSTANT(target, AUG_ENABLE_SPAN);
     NODE_DEFINE_CONSTANT(target, AUG_NO_ERR_CLOSE);
+
+    // error codes:
+    NODE_DEFINE_CONSTANT(target, AUG_NOERROR);
+    NODE_DEFINE_CONSTANT(target, AUG_ENOMEM);
+    NODE_DEFINE_CONSTANT(target, AUG_EINTERNAL);
+    NODE_DEFINE_CONSTANT(target, AUG_EPATHX);
+    NODE_DEFINE_CONSTANT(target, AUG_ENOMATCH);
+    NODE_DEFINE_CONSTANT(target, AUG_EMMATCH);
+    NODE_DEFINE_CONSTANT(target, AUG_ESYNTAX);
+    NODE_DEFINE_CONSTANT(target, AUG_ENOLENS);
+    NODE_DEFINE_CONSTANT(target, AUG_EMXFM);
+    NODE_DEFINE_CONSTANT(target, AUG_ENOSPAN);
+    NODE_DEFINE_CONSTANT(target, AUG_EMVDESC);
+    NODE_DEFINE_CONSTANT(target, AUG_ECMDRUN);
+    NODE_DEFINE_CONSTANT(target, AUG_EBADARG);
+
 
 // I do not want copy-n-paste errors here:
 #define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(tpl, #m, m)
@@ -79,6 +97,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(loadFile);
     _NEW_METHOD(saveFile);
     _NEW_METHOD(insert);
+    _NEW_METHOD(error);
 
     //TODO:
     // _NEW_METHOD(match);
@@ -328,6 +347,24 @@ Handle<Value> LibAugeas::insert(const Arguments& args)
     }
 }
 
+/*
+ * Wrapper of aug_error()
+ * Return the error code from the last API call
+ */
+Handle<Value> LibAugeas::error(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 0) {
+        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    int rc = aug_error(obj->m_aug);
+    return scope.Close(Int32::New(rc));
+}
 
 /*
  * Wrapper of aug_save() - save changed files
