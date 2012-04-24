@@ -45,6 +45,8 @@ protected:
     LibAugeas();
     ~LibAugeas();
 
+    static Persistent<FunctionTemplate> augeasTemplate;
+
     static Handle<Value> New(const Arguments& args);
 
     static Handle<Value> get        (const Arguments& args);
@@ -61,12 +63,13 @@ protected:
     static Handle<Value> error      (const Arguments& args);
 };
 
+Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
 
 void LibAugeas::Init(Handle<Object> target)
 {
-    Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-    tpl->SetClassName(String::NewSymbol("Augeas"));
-    tpl->InstanceTemplate()->SetInternalFieldCount(1);
+    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New(New));
+    augeasTemplate->SetClassName(String::NewSymbol("Augeas"));
+    augeasTemplate->InstanceTemplate()->SetInternalFieldCount(1);
 
     // flags for aug_init():
     NODE_DEFINE_CONSTANT(target, AUG_NONE);
@@ -97,7 +100,7 @@ void LibAugeas::Init(Handle<Object> target)
 
 
 // I do not want copy-n-paste errors here:
-#define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(tpl, #m, m)
+#define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(augeasTemplate, #m, m)
     _NEW_METHOD(get);
     _NEW_METHOD(set);
     _NEW_METHOD(setm);
@@ -115,7 +118,7 @@ void LibAugeas::Init(Handle<Object> target)
     // _NEW_METHOD(match);
 
     Persistent<Function> constructor =
-        Persistent<Function>::New(tpl->GetFunction());
+        Persistent<Function>::New(augeasTemplate->GetFunction());
 
     target->Set(String::NewSymbol("Augeas"), constructor);
 }
@@ -129,22 +132,7 @@ Local<Object> LibAugeas::New(augeas *aug)
 {
     LibAugeas *obj = new LibAugeas();
     obj->m_aug = aug;
-
-    Handle<ObjectTemplate> tpl = ObjectTemplate::New();
-    tpl->SetInternalFieldCount(1); // one field for LibAugeas* pointer (via obj->Wrap())
-
-#define _OBJ_NEW_METHOD(m) NODE_SET_METHOD(tpl, #m, m)
-    _OBJ_NEW_METHOD(get);
-    _OBJ_NEW_METHOD(set);
-    _OBJ_NEW_METHOD(setm);
-    _OBJ_NEW_METHOD(rm);
-    _OBJ_NEW_METHOD(mv);
-    _OBJ_NEW_METHOD(save);
-    _OBJ_NEW_METHOD(nmatch);
-    _OBJ_NEW_METHOD(insert);
-    _OBJ_NEW_METHOD(error);
-
-    Local<Object> O = tpl->NewInstance();
+    Local<Object> O = augeasTemplate->InstanceTemplate()->NewInstance();
     obj->Wrap(O);
     return O;
 }
