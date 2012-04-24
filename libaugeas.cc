@@ -29,8 +29,17 @@ using namespace v8;
 inline void throw_aug_error_msg(augeas *aug)
 {
     std::string msg = aug_error_message(aug);
-    msg += ": ";
-    msg += aug_error_minor_message(aug);
+    const char *minor = aug_error_minor_message(aug);
+    const char *details = aug_error_details(aug);
+    if (NULL != minor) {
+        msg += ": ";
+        msg += minor;
+    }
+    if (NULL != details) {
+        msg += " (";
+        msg += details;
+        msg += ")";
+    }
     ThrowException(Exception::Error(String::New(msg.c_str())));
 }
 
