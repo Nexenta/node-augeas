@@ -38,6 +38,7 @@ inline void throw_aug_error_msg(augeas *aug)
 class LibAugeas : public node::ObjectWrap {
 public:
     static void Init(Handle<Object> target);
+    static Local<Object> New(augeas *aug);
 
 protected:
     augeas * m_aug;
@@ -59,6 +60,7 @@ protected:
     static Handle<Value> insert     (const Arguments& args);
     static Handle<Value> error      (const Arguments& args);
 };
+
 
 void LibAugeas::Init(Handle<Object> target)
 {
@@ -116,6 +118,35 @@ void LibAugeas::Init(Handle<Object> target)
         Persistent<Function>::New(tpl->GetFunction());
 
     target->Set(String::NewSymbol("Augeas"), constructor);
+}
+
+/* 
+ * Returns an JS object to pass it in callback function.
+ * This JS objects wraps an LibAugeas object.
+ * Only for using within this C++ code.
+ */
+Local<Object> LibAugeas::New(augeas *aug)
+{
+    LibAugeas *obj = new LibAugeas();
+    obj->m_aug = aug;
+
+    Handle<ObjectTemplate> tpl = ObjectTemplate::New();
+    tpl->SetInternalFieldCount(1); // one field for LibAugeas* pointer (via obj->Wrap())
+
+#define _OBJ_NEW_METHOD(m) NODE_SET_METHOD(tpl, #m, m)
+    _OBJ_NEW_METHOD(get);
+    _OBJ_NEW_METHOD(set);
+    _OBJ_NEW_METHOD(setm);
+    _OBJ_NEW_METHOD(rm);
+    _OBJ_NEW_METHOD(mv);
+    _OBJ_NEW_METHOD(save);
+    _OBJ_NEW_METHOD(nmatch);
+    _OBJ_NEW_METHOD(insert);
+    _OBJ_NEW_METHOD(error);
+
+    Local<Object> O = tpl->NewInstance();
+    obj->Wrap(O);
+    return O;
 }
 
 Handle<Value> LibAugeas::New(const Arguments& args)
@@ -810,10 +841,128 @@ LibAugeas::~LibAugeas()
 }
 
 
+struct HeraclesUV {
+    uv_work_t request;
+    Persistent<Function> callback;
+    std::string lens; // TODO: maybe array
+    std::string incl; // TODO: maybe array
+    std::string excl; // TODO: maybe array
+    augeas *aug; // = aug_init(...)
+};
+
+
+/* 
+ * This function should immediately return if any call to augeas API fails.
+ * The caller should check aug_error() before doing anything.
+ */
+void heraclesWork(uv_work_t *req)
+{
+    int rc = AUG_NOERROR;
+
+    HeraclesUV *her = static_cast<HeraclesUV*>(req->data);
+
+    unsigned int flags = AUG_NO_ERR_CLOSE;
+
+    // do not load all lenses if a specific lens is given:
+    if (!her->lens.empty()) {
+        flags |= AUG_NO_MODL_AUTOLOAD;
+        // do not load all files if a specific file is given.
+        if (!her->incl.empty()) {
+            flags |= AUG_NO_LOAD;
+        }
+    }
+
+    her->aug = aug_init(NULL, NULL, flags);
+    rc = aug_error(her->aug);
+    if (AUG_NOERROR != rc)
+        return;
+
+    if (!her->lens.empty()) {
+        // specifying which lens to load
+        // /augeas/load/<random-name>/lens = e. g.: "hosts.lns" or "@Hosts_Access"
+        std::string basePath = "/augeas/load/" + her->lens; // any name
+        std::string lensPath = basePath + "/lens";
+        std::string lensVal  = her->lens;
+        if ((lensVal[0] != '@') // if not a module
+                && (lensVal.rfind(".lns") == std::string::npos))
+        {
+            lensVal += ".lns";
+        }
+        rc = aug_set(her->aug, lensPath.c_str(), lensVal.c_str());
+        if (AUG_NOERROR != rc)
+            return;
+
+        if (!her->incl.empty()) {
+            // specifying which files to load :
+            // /augeas/load/<random-name>/incl = glob
+            std::string inclPath = basePath + "/incl";
+            rc = aug_set(her->aug, inclPath.c_str(), her->incl.c_str());
+            if (AUG_NOERROR != rc)
+                return;
+        }
+        if (!her->excl.empty()) {
+            // specifying which files NOT to load
+            // /augeas/load/<random-name>/excl = glob (e. g. "*.dpkg-new")
+            std::string exclPath = basePath + "/incl";
+            rc = aug_set(her->aug, exclPath.c_str(), her->excl.c_str());
+            if (AUG_NOERROR != rc)
+                return;
+        }
+
+        rc = aug_load(her->aug);
+        if (AUG_NOERROR != rc)
+            return;
+    }
+}
+
+void heraclesAfter(uv_work_t* req)
+{
+    HandleScope scope;
+    HeraclesUV *her = static_cast<HeraclesUV*>(req->data);
+
+    if (AUG_NOERROR == aug_error(her->aug)) {
+        Local<Value> argv[] = {LibAugeas::New(her->aug)};
+        TryCatch try_catch;
+        her->callback->Call(Context::GetCurrent()->Global(), 1, argv);
+        if (try_catch.HasCaught()) {
+            node::FatalException(try_catch);
+        }
+    }
+
+    her->callback.Dispose();
+    delete her;
+}
+
+Handle<Value> heracles(const Arguments& args)
+{
+    HandleScope scope;
+    Local<Function> callback;
+
+    if (args.Length() == 1) {
+        if (!args[0]->IsFunction()) {
+            ThrowException(Exception::TypeError(String::New("Single argument must be a function")));
+            return scope.Close(Undefined());
+        }
+        callback = Local<Function>::Cast(args[0]);
+    }
+
+    HeraclesUV *her = new HeraclesUV();
+    her->request.data = her;
+    her->callback = Persistent<Function>::New(callback);
+
+    uv_queue_work(uv_default_loop(), &her->request,
+                  heraclesWork, heraclesAfter);
+
+    return scope.Close(Undefined());
+}
+
+
 
 void init(Handle<Object> target)
 {
     LibAugeas::Init(target);
+
+    target->Set(String::NewSymbol("heracles"), FunctionTemplate::New(heracles)->GetFunction());
 }
 
 NODE_MODULE(libaugeas, init)
