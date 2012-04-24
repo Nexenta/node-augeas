@@ -1,1 +1,37 @@
-test
+1. REQUIREMENTS
+
+ You need Augeas (>= 0.10.0) [1] to build this addon.
+ Please note that Augeas (>= 0.10.0) itself requires LibXML2 [2].
+
+
+
+2. BUILDING
+
+ node-waf drives building this addon using file "wscript".
+ Type "node-waf configure build" in console to configure and
+ to build this addon [3]. Other useful options to node-waf are
+ "clean" and "distclean".
+
+ wscript uses pkg-config [4] to check for Augeas and LibXML2.
+
+
+
+3. USAGE
+ 
+ Examples are in the subdirectory "examples". Run them from the
+ top source directory with command "node ./examples/some-example.js".
+       * DON'T do it as root * (to be on the safe side ;-)
+
+ Learning Augeas documentation is also appreciated [1].
+
+ // to be continued ...
+
+
+
+4. REFERENCES
+
+[1] Augeas. http://augeas.net
+[2] LibXML2. http://xmlsoft.org
+[3] Node addons. http://nodejs.org/api/addons.html
+[4] pkg-config. http://www.freedesktop.org/wiki/Software/pkg-config
+
