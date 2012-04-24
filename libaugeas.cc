@@ -67,10 +67,6 @@ Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
 
 void LibAugeas::Init(Handle<Object> target)
 {
-    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New(New));
-    augeasTemplate->SetClassName(String::NewSymbol("Augeas"));
-    augeasTemplate->InstanceTemplate()->SetInternalFieldCount(1);
-
     // flags for aug_init():
     NODE_DEFINE_CONSTANT(target, AUG_NONE);
     NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
@@ -98,6 +94,9 @@ void LibAugeas::Init(Handle<Object> target)
     NODE_DEFINE_CONSTANT(target, AUG_ECMDRUN);
     NODE_DEFINE_CONSTANT(target, AUG_EBADARG);
 
+    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New(New));
+    augeasTemplate->SetClassName(String::NewSymbol("Augeas"));
+    augeasTemplate->InstanceTemplate()->SetInternalFieldCount(1);
 
 // I do not want copy-n-paste errors here:
 #define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(augeasTemplate, #m, m)
@@ -123,7 +122,7 @@ void LibAugeas::Init(Handle<Object> target)
     target->Set(String::NewSymbol("Augeas"), constructor);
 }
 
-/* 
+/*
  * Returns an JS object to pass it in callback function.
  * This JS objects wraps an LibAugeas object.
  * Only for using within this C++ code.
@@ -839,7 +838,7 @@ struct HeraclesUV {
 };
 
 
-/* 
+/*
  * This function should immediately return if any call to augeas API fails.
  * The caller should check aug_error() before doing anything.
  */
