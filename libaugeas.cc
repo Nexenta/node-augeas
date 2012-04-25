@@ -65,6 +65,7 @@ protected:
     static Handle<Value> mv         (const Arguments& args);
     static Handle<Value> save       (const Arguments& args);
     static Handle<Value> nmatch     (const Arguments& args);
+    static Handle<Value> match      (const Arguments& args);
     static Handle<Value> load       (const Arguments& args);
     static Handle<Value> loadFile   (const Arguments& args);
     static Handle<Value> saveFile   (const Arguments& args);
@@ -116,6 +117,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(mv);
     _NEW_METHOD(save);
     _NEW_METHOD(nmatch);
+    _NEW_METHOD(match);
     _NEW_METHOD(load);
     _NEW_METHOD(loadFile);
     _NEW_METHOD(saveFile);
@@ -470,6 +472,41 @@ Handle<Value> LibAugeas::nmatch(const Arguments& args)
     int rc = aug_match(obj->m_aug, path, NULL);
     if (rc >= 0) {
         return scope.Close(Number::New(rc));
+    } else {
+        throw_aug_error_msg(obj->m_aug);
+        return scope.Close(Undefined());
+    }
+}
+
+/*
+ * Wrapper of aug_match(, , non-NULL).
+ * Returns an array of nodes matching given path expression
+ */
+Handle<Value> LibAugeas::match(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 1) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value p_str(args[0]);
+
+    const char *path  = *p_str;
+    char **matches = NULL;
+
+    int rc = aug_match(obj->m_aug, path, &matches);
+    if (rc >= 0) {
+        assert(matches != NULL);
+        Local<Array> result = Array::New(rc);
+        for (int i = 0; i < rc; ++i) {
+            result->Set(Number::New(i), String::New(matches[i]));
+            free(matches[i]);
+        }
+        free(matches);
+        return scope.Close(result);
     } else {
         throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
