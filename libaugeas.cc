@@ -36,9 +36,8 @@ inline void throw_aug_error_msg(augeas *aug)
         msg += minor;
     }
     if (NULL != details) {
-        msg += " (";
+        msg += " -> ";
         msg += details;
-        msg += ")";
     }
     ThrowException(Exception::Error(String::New(msg.c_str())));
 }
