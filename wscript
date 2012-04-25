@@ -15,7 +15,6 @@ def configure(conf):
                 mandatory=True)
 def build(bld):
   obj = bld.new_task_gen('cxx', 'shlib', 'node_addon')
-  obj.cxxflags = ['-I/usr/include/libxml2']
   obj.target = 'libaugeas'
   obj.source = 'libaugeas.cc'
   obj.uselib = ['AUGEAS', 'LIBXML-2.0']
