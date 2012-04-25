@@ -548,7 +548,7 @@ LibAugeas::~LibAugeas()
 }
 
 
-struct HeraclesUV {
+struct CreateAugeasUV {
     uv_work_t request;
     Persistent<Function> callback;
     std::string lens; // TODO: maybe array
@@ -562,11 +562,11 @@ struct HeraclesUV {
  * This function should immediately return if any call to augeas API fails.
  * The caller should check aug_error() before doing anything.
  */
-void heraclesWork(uv_work_t *req)
+void createAugeasWork(uv_work_t *req)
 {
     int rc = AUG_NOERROR;
 
-    HeraclesUV *her = static_cast<HeraclesUV*>(req->data);
+    CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
 
     unsigned int flags = AUG_NO_ERR_CLOSE;
 
@@ -622,10 +622,10 @@ void heraclesWork(uv_work_t *req)
     }
 }
 
-void heraclesAfter(uv_work_t* req)
+void createAugeasAfter(uv_work_t* req)
 {
     HandleScope scope;
-    HeraclesUV *her = static_cast<HeraclesUV*>(req->data);
+    CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
 
     if (AUG_NOERROR == aug_error(her->aug)) {
         Local<Value> argv[] = {LibAugeas::New(her->aug)};
@@ -640,7 +640,7 @@ void heraclesAfter(uv_work_t* req)
     delete her;
 }
 
-Handle<Value> heracles(const Arguments& args)
+Handle<Value> createAugeas(const Arguments& args)
 {
     HandleScope scope;
     Local<Function> callback;
@@ -653,12 +653,12 @@ Handle<Value> heracles(const Arguments& args)
         callback = Local<Function>::Cast(args[0]);
     }
 
-    HeraclesUV *her = new HeraclesUV();
+    CreateAugeasUV *her = new CreateAugeasUV();
     her->request.data = her;
     her->callback = Persistent<Function>::New(callback);
 
     uv_queue_work(uv_default_loop(), &her->request,
-                  heraclesWork, heraclesAfter);
+                  createAugeasWork, createAugeasAfter);
 
     return scope.Close(Undefined());
 }
@@ -669,7 +669,8 @@ void init(Handle<Object> target)
 {
     LibAugeas::Init(target);
 
-    target->Set(String::NewSymbol("heracles"), FunctionTemplate::New(heracles)->GetFunction());
+    target->Set(String::NewSymbol("createAugeas"),
+            FunctionTemplate::New(createAugeas)->GetFunction());
 }
 
 NODE_MODULE(libaugeas, init)
