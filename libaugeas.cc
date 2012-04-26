@@ -41,10 +41,28 @@ inline void throw_aug_error_msg(augeas *aug)
 }
 
 
+/*
+ * Helper function.
+ * Converts object member *key into std::string.
+ * Returns empty string if memder does not exist.
+ */
+inline std::string get_str_value(Handle<Object> obj, const char *key)
+{
+    Local<Value> m = obj->Get(Local<String>(String::New(key)));
+    if (!m->IsUndefined()) {
+        String::Utf8Value str(m);
+        return std::string(*str);
+    } else {
+        return std::string();
+    }
+}
+
+
 class LibAugeas : public node::ObjectWrap {
 public:
     static void Init(Handle<Object> target);
     static Local<Object> New(augeas *aug);
+    static Handle<Value> NewInstance(const Arguments& args);
 
 protected:
     augeas * m_aug;
@@ -52,6 +70,7 @@ protected:
     ~LibAugeas();
 
     static Persistent<FunctionTemplate> augeasTemplate;
+    static Persistent<Function> constructor;
 
     static Handle<Value> New(const Arguments& args);
 
@@ -69,6 +88,7 @@ protected:
 };
 
 Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
+Persistent<Function> LibAugeas::constructor;
 
 void LibAugeas::Init(Handle<Object> target)
 {
@@ -120,14 +140,13 @@ void LibAugeas::Init(Handle<Object> target)
     //TODO:
     // _NEW_METHOD(match);
 
-    Persistent<Function> constructor =
-        Persistent<Function>::New(augeasTemplate->GetFunction());
+    constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
 
     target->Set(String::NewSymbol("Augeas"), constructor);
 }
 
 /*
- * Returns an JS object to pass it in callback function.
+ * Creates an JS object to pass it in callback function.
  * This JS objects wraps an LibAugeas object.
  * Only for using within this C++ code.
  */
@@ -140,6 +159,38 @@ Local<Object> LibAugeas::New(augeas *aug)
     return O;
 }
 
+
+/*
+ * Creates an JS object from this C++ code,
+ * passing arguments received from JS code to
+ * the constructor LibAugeas::New(const Arguments& args)
+ */
+Handle<Value> LibAugeas::NewInstance(const Arguments& args)
+{
+    HandleScope scope;
+    Handle<Value> *argv = NULL;
+
+    int argc = args.Length();
+    if (argc > 0) {
+        argv = new Handle<Value>[argc];
+        assert(argv != NULL);
+        for (int i = 0; i < argc; ++i) {
+            argv[i] = args[i];
+        }
+    }
+
+    Local<Object> instance = constructor->NewInstance(argc, argv);
+
+    if (NULL != argv)
+        delete [] argv;
+
+    return scope.Close(instance);
+}
+
+/*
+ * This function is used as a constructor from JS side via
+ * var aug = new lib.Augeas(...);
+ */
 Handle<Value> LibAugeas::New(const Arguments& args)
 {
     HandleScope scope;
@@ -550,10 +601,12 @@ LibAugeas::~LibAugeas()
 struct CreateAugeasUV {
     uv_work_t request;
     Persistent<Function> callback;
-    std::string lens; // TODO: maybe array
-    std::string incl; // TODO: maybe array
-    std::string excl; // TODO: maybe array
-    augeas *aug; // = aug_init(...)
+    std::string lens;
+    std::string incl;
+    std::string excl;
+    std::string root;
+    std::string loadpath;
+    augeas *aug;
 };
 
 
@@ -578,7 +631,7 @@ void createAugeasWork(uv_work_t *req)
         }
     }
 
-    her->aug = aug_init(NULL, NULL, flags);
+    her->aug = aug_init(her->root.c_str(), her->loadpath.c_str(), flags);
     rc = aug_error(her->aug);
     if (AUG_NOERROR != rc)
         return;
@@ -586,7 +639,7 @@ void createAugeasWork(uv_work_t *req)
     if (!her->lens.empty()) {
         // specifying which lens to load
         // /augeas/load/<random-name>/lens = e. g.: "hosts.lns" or "@Hosts_Access"
-        std::string basePath = "/augeas/load/" + her->lens; // any name
+        std::string basePath = "/augeas/load/1"; // "1" is a random valid name :-)
         std::string lensPath = basePath + "/lens";
         std::string lensVal  = her->lens;
         if ((lensVal[0] != '@') // if not a module
@@ -638,27 +691,56 @@ void createAugeasAfter(uv_work_t* req)
     delete her;
 }
 
+/*
+ * Creates augeas object from JS side either in sync or async way
+ * depending on the last argument:
+ *
+ * lib.createAugeas([...], function(aug) {..}) - async
+ *
+ * or:
+ *
+ * var aug = lib.createAugeas([...]) - sync
+ *
+ * The latter is equivalent to var aug = new lib.Augeas([...]);
+ */
+
 Handle<Value> createAugeas(const Arguments& args)
 {
     HandleScope scope;
-    Local<Function> callback;
 
-    if (args.Length() == 1) {
-        if (!args[0]->IsFunction()) {
-            ThrowException(Exception::TypeError(String::New("Single argument must be a function")));
-            return scope.Close(Undefined());
+    /*
+     * If the last argument is a function, create augeas
+     * in an async way, and then pass it to that function.
+     */
+    bool async = (args.Length() > 0) && (args[args.Length()-1]->IsFunction());
+
+    if (async) {
+        CreateAugeasUV *her = new CreateAugeasUV();
+        her->request.data = her;
+        her->callback = Persistent<Function>::New(
+                            Local<Function>::Cast(args[args.Length()-1]));
+
+        /* TODO:
+         * if args[0] is a string use it as root
+         * if args[1] is a string use it as load path
+         * use more then one objects.
+         * From JS point it might look like this:
+         * createAugeas('/root', '/load:/path', {lens:...}, {lens:...}, ..., callback);
+         */
+        if (args[0]->IsObject()) {
+            Local<Object> obj = args[0]->ToObject();
+            her->lens = get_str_value(obj, "lens");
+            her->incl = get_str_value(obj, "incl");
+            her->excl = get_str_value(obj, "excl");
         }
-        callback = Local<Function>::Cast(args[0]);
+
+        uv_queue_work(uv_default_loop(), &her->request,
+                      createAugeasWork, createAugeasAfter);
+
+        return scope.Close(Undefined());
+    } else { // sync
+        return scope.Close(LibAugeas::NewInstance(args));
     }
-
-    CreateAugeasUV *her = new CreateAugeasUV();
-    her->request.data = her;
-    her->callback = Persistent<Function>::New(callback);
-
-    uv_queue_work(uv_default_loop(), &her->request,
-                  createAugeasWork, createAugeasAfter);
-
-    return scope.Close(Undefined());
 }
 
 
@@ -668,7 +750,7 @@ void init(Handle<Object> target)
     LibAugeas::Init(target);
 
     target->Set(String::NewSymbol("createAugeas"),
-            FunctionTemplate::New(createAugeas)->GetFunction());
+                FunctionTemplate::New(createAugeas)->GetFunction());
 }
 
 NODE_MODULE(libaugeas, init)
