@@ -611,7 +611,7 @@ void createAugeasWork(uv_work_t *req)
         if (!her->excl.empty()) {
             // specifying which files NOT to load
             // /augeas/load/<random-name>/excl = glob (e. g. "*.dpkg-new")
-            std::string exclPath = basePath + "/incl";
+            std::string exclPath = basePath + "/excl";
             rc = aug_set(her->aug, exclPath.c_str(), her->excl.c_str());
             if (AUG_NOERROR != rc)
                 return;
