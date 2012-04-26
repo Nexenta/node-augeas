@@ -137,8 +137,6 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(insert);
     _NEW_METHOD(error);
 
-    //TODO:
-    // _NEW_METHOD(match);
 
     constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
 
