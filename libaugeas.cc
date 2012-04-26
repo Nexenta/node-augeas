@@ -494,13 +494,14 @@ Handle<Value> LibAugeas::match(const Arguments& args)
 
     int rc = aug_match(obj->m_aug, path, &matches);
     if (rc >= 0) {
-        assert(matches != NULL);
         Local<Array> result = Array::New(rc);
-        for (int i = 0; i < rc; ++i) {
-            result->Set(Number::New(i), String::New(matches[i]));
-            free(matches[i]);
+        if (NULL != matches) {
+            for (int i = 0; i < rc; ++i) {
+                result->Set(Number::New(i), String::New(matches[i]));
+                free(matches[i]);
+            }
+            free(matches);
         }
-        free(matches);
         return scope.Close(result);
     } else {
         throw_aug_error_msg(obj->m_aug);
