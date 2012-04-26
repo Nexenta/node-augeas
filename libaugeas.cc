@@ -626,15 +626,14 @@ void createAugeasWork(uv_work_t *req)
 void createAugeasAfter(uv_work_t* req)
 {
     HandleScope scope;
-    CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
 
-    if (AUG_NOERROR == aug_error(her->aug)) {
-        Local<Value> argv[] = {LibAugeas::New(her->aug)};
-        TryCatch try_catch;
-        her->callback->Call(Context::GetCurrent()->Global(), 1, argv);
-        if (try_catch.HasCaught()) {
-            node::FatalException(try_catch);
-        }
+    CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
+    Local<Value> argv[] = {LibAugeas::New(her->aug)};
+
+    TryCatch try_catch;
+    her->callback->Call(Context::GetCurrent()->Global(), 1, argv);
+    if (try_catch.HasCaught()) {
+        node::FatalException(try_catch);
     }
 
     her->callback.Dispose();
