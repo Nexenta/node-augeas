@@ -456,38 +456,88 @@ Handle<Value> LibAugeas::error(const Arguments& args)
     return scope.Close(Int32::New(rc));
 }
 
+
+
+struct SaveUV {
+    uv_work_t request;
+    Persistent<Function> callback;
+    augeas *aug;
+    int rc; // = aug_save(), 0 on success, -1 on error
+};
+
+void saveWork(uv_work_t *req)
+{
+    SaveUV *suv = static_cast<SaveUV*>(req->data);
+    suv->rc = aug_save(suv->aug);
+}
+
 /*
- * Wrapper of aug_save() - save changed files
- * TODO: The exact behavior of aug_save can be
- *       fine-tuned by modifying the node /augeas/save
- *       prior to calling aug_save(). The valid values for this node are:
- *       overwrite, backup, newfile, noop.
+ * Execute JS callback after saveWork() terminated
+ */
+void saveAfter(uv_work_t* req)
+{
+    HandleScope scope;
+
+    SaveUV *suv = static_cast<SaveUV*>(req->data);
+    Local<Value> argv[] = {Local<Boolean>::New(Boolean::New(0 == suv->rc))};
+
+    TryCatch try_catch;
+    suv->callback->Call(Context::GetCurrent()->Global(), 1, argv);
+    if (try_catch.HasCaught()) {
+        node::FatalException(try_catch);
+    }
+
+    suv->callback.Dispose();
+    delete suv;
+}
+
+/*
+ * Wrapper of aug_save() - save changed files.
+ * The exact behavior of aug_save can be
+ * fine-tuned by modifying the node /augeas/save
+ * prior to calling aug_save(). The valid values for this node are:
+ * overwrite, backup, newfile, noop. See also flags for aug_init().
+ *
+ * Without arguments this function performs blocking saving
+ * and throws an exception on error.
+ *
+ * The only argument allowed is a callback function.
+ * If such an argument is given this function performs
+ * non-blocking (async) saving, and after saving is done (or failed)
+ * executes the callback with one boolean argument: true on success saving
+ * and false on failure.
+ *
+ * NOTE: multiple async calls of this function (from the same augeas object)
+ * will result in crash (double free or segfault) because of using
+ * shared augeas handle.
+ *
+ * Always returns undefined.
  */
 Handle<Value> LibAugeas::save(const Arguments& args)
 {
     HandleScope scope;
 
-    if (args.Length() != 0) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
-        return scope.Close(Undefined());
-    }
-
     LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
 
-    int rc = aug_save(obj->m_aug);
-    if (0 == rc) {
-        // ok
-        return scope.Close(Undefined());
+    // if no args, save files synchronously (blocking):
+    if (args.Length() == 0) {
+        int rc = aug_save(obj->m_aug);
+        if (0 != rc) {
+            ThrowException(Exception::Error(String::New("Failed to write files")));
+        }
+        // single argument is a function - async:
+    } else if ((args.Length() == 1) && args[0]->IsFunction()) {
+        SaveUV * suv = new SaveUV();
+        suv->request.data = suv;
+        suv->aug = obj->m_aug;
+        suv->callback = Persistent<Function>::New(
+                            Local<Function>::Cast(args[0]));
+        uv_queue_work(uv_default_loop(), &suv->request, saveWork, saveAfter);
     } else {
-        /* TODO: error description is under /augeas/.../error
-         * Example:
-         * /augeas/files/etc/hosts/error = "open_augnew"
-         * /augeas/files/etc/hosts/error/message = "No such file or directory"
-         */
-        ThrowException(Exception::Error(String::New("Failed to write files")));
-        return scope.Close(Undefined());
+        ThrowException(Exception::Error(String::New("Callback function or nothing")));
     }
 
+    return scope.Close(Undefined());
 }
 
 /*
