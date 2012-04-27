@@ -46,7 +46,7 @@ inline void throw_aug_error_msg(augeas *aug)
  * Converts object member *key into std::string.
  * Returns empty string if memder does not exist.
  */
-inline std::string get_str_value(Handle<Object> obj, const char *key)
+inline std::string memberToString(Handle<Object> obj, const char *key)
 {
     Local<Value> m = obj->Get(Local<String>(String::New(key)));
     if (!m->IsUndefined()) {
@@ -57,6 +57,20 @@ inline std::string get_str_value(Handle<Object> obj, const char *key)
     }
 }
 
+/*
+ * Helper function.
+ * Converts object member *key into int32.
+ * Returns 0 if memder does not exist.
+ */
+inline int32_t memberToInt32(Handle<Object> obj, const char *key)
+{
+    Local<Value> m = obj->Get(Local<String>(String::New(key)));
+    if (!m->IsUndefined()) {
+        return obj->Int32Value();
+    } else {
+        return 0;
+    }
+}
 
 class LibAugeas : public node::ObjectWrap {
 public:
@@ -649,11 +663,12 @@ LibAugeas::~LibAugeas()
 struct CreateAugeasUV {
     uv_work_t request;
     Persistent<Function> callback;
+    std::string root;
+    std::string loadpath;
     std::string lens;
     std::string incl;
     std::string excl;
-    std::string root;
-    std::string loadpath;
+    int flags;
     augeas *aug;
 };
 
@@ -668,15 +683,18 @@ void createAugeasWork(uv_work_t *req)
 
     CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
 
-    unsigned int flags = AUG_NO_ERR_CLOSE;
+    unsigned int flags;
 
-    // do not load all lenses if a specific lens is given:
+    // Always set AUG_NO_ERR_CLOSE:
+    flags = AUG_NO_ERR_CLOSE | her->flags;
+
+    // do not load all lenses if a specific lens is given,
+    // ignore any setting in flags.
+    // XXX: AUG_NO_MODL_AUTOLOAD implies AUG_NO_LOAD
     if (!her->lens.empty()) {
         flags |= AUG_NO_MODL_AUTOLOAD;
-        // do not load all files if a specific file is given.
-        if (!her->incl.empty()) {
-            flags |= AUG_NO_LOAD;
-        }
+    } else {
+        flags &= ~AUG_NO_MODL_AUTOLOAD;
     }
 
     her->aug = aug_init(her->root.c_str(), her->loadpath.c_str(), flags);
@@ -769,17 +787,21 @@ Handle<Value> createAugeas(const Arguments& args)
                             Local<Function>::Cast(args[args.Length()-1]));
 
         /* TODO:
-         * if args[0] is a string use it as root
-         * if args[1] is a string use it as load path
-         * use more then one objects.
+         * Use more then one object.
          * From JS point it might look like this:
-         * createAugeas('/root', '/load:/path', {lens:...}, {lens:...}, ..., callback);
+         * createAugeas({root:..., loadpath:..., lens:...}, {lens:...}, {lens:...}, ..., callback);
+         * In the first object there might be root, loadpath or flags members, and lenses
+         * might be omitted. In other objects only lens, incl and excl members should be allowed.
+         * ** flags are filterred in createAugeasWork() **
          */
         if (args[0]->IsObject()) {
             Local<Object> obj = args[0]->ToObject();
-            her->lens = get_str_value(obj, "lens");
-            her->incl = get_str_value(obj, "incl");
-            her->excl = get_str_value(obj, "excl");
+            her->root = memberToString(obj, "root");
+            her->loadpath = memberToString(obj, "loadpath");
+            her->flags = memberToInt32(obj, "flags");
+            her->lens = memberToString(obj, "lens");
+            her->incl = memberToString(obj, "incl");
+            her->excl = memberToString(obj, "excl");
         }
 
         uv_queue_work(uv_default_loop(), &her->request,
