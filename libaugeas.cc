@@ -66,7 +66,7 @@ inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
 {
     Local<Value> m = obj->Get(Local<String>(String::New(key)));
     if (!m->IsUndefined()) {
-        return obj->Uint32Value();
+        return m->Uint32Value();
     } else {
         return 0;
     }
@@ -769,7 +769,6 @@ void createAugeasAfter(uv_work_t* req)
  *
  * The latter is equivalent to var aug = new lib.Augeas([...]);
  */
-
 Handle<Value> createAugeas(const Arguments& args)
 {
     HandleScope scope;
