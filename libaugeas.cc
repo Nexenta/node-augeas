@@ -62,7 +62,7 @@ inline std::string memberToString(Handle<Object> obj, const char *key)
  * Converts object member *key into int32.
  * Returns 0 if memder does not exist.
  */
-inline int32_t memberToInt32(Handle<Object> obj, const char *key)
+inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
 {
     Local<Value> m = obj->Get(Local<String>(String::New(key)));
     if (!m->IsUndefined()) {
@@ -668,7 +668,7 @@ struct CreateAugeasUV {
     std::string lens;
     std::string incl;
     std::string excl;
-    int flags;
+    unsigned int flags;
     augeas *aug;
 };
 
@@ -798,7 +798,7 @@ Handle<Value> createAugeas(const Arguments& args)
             Local<Object> obj = args[0]->ToObject();
             her->root = memberToString(obj, "root");
             her->loadpath = memberToString(obj, "loadpath");
-            her->flags = memberToInt32(obj, "flags");
+            her->flags = memberToUint32(obj, "flags");
             her->lens = memberToString(obj, "lens");
             her->incl = memberToString(obj, "incl");
             her->excl = memberToString(obj, "excl");
