@@ -59,14 +59,14 @@ inline std::string memberToString(Handle<Object> obj, const char *key)
 
 /*
  * Helper function.
- * Converts object member *key into int32.
+ * Converts object member *key into uint32.
  * Returns 0 if memder does not exist.
  */
 inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
 {
     Local<Value> m = obj->Get(Local<String>(String::New(key)));
     if (!m->IsUndefined()) {
-        return obj->Int32Value();
+        return obj->Uint32Value();
     } else {
         return 0;
     }
