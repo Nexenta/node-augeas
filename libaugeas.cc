@@ -697,19 +697,16 @@ Handle<Value> LibAugeas::load(const Arguments& args)
 
     LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
 
+    /* aug_load() returns -1 on error, 0 on success. Success includes the case
+     * where some files could not be loaded. Details of such files can be found
+     * as '/augeas//error'.
+     */
     int rc = aug_load(obj->m_aug);
-    if (0 == rc) {
-        // ok
-        return scope.Close(Undefined());
-    } else {
-        /* TODO: error description is under /augeas/.../error
-         * Example:
-         * /augeas/files/etc/hosts/error = "open_augnew"
-         * /augeas/files/etc/hosts/error/message = "No such file or directory"
-         */
+    if (0 != rc) {
         ThrowException(Exception::Error(String::New("Failed to load files")));
-        return scope.Close(Undefined());
     }
+
+    return scope.Close(Undefined());
 }
 
 
