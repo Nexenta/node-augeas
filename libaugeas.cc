@@ -93,6 +93,7 @@ protected:
 
     static Handle<Value> New(const Arguments& args);
 
+    static Handle<Value> defvar     (const Arguments& args);
     static Handle<Value> get        (const Arguments& args);
     static Handle<Value> set        (const Arguments& args);
     static Handle<Value> setm       (const Arguments& args);
@@ -145,6 +146,7 @@ void LibAugeas::Init(Handle<Object> target)
 
 // I do not want copy-n-paste errors here:
 #define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(augeasTemplate, #m, m)
+    _NEW_METHOD(defvar);
     _NEW_METHOD(get);
     _NEW_METHOD(set);
     _NEW_METHOD(setm);
@@ -251,6 +253,42 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     obj->Wrap(args.This());
 
     return args.This();
+}
+
+/*
+ * Wrapper of aug_defvar() - define a variable
+ * The second argument is optional and if ommited,
+ * variable will be removed if exists.
+ *
+ * On error, throws an exception and returns undefined;
+ * on success, returns 0 if expr evaluates to anything
+ * other than a nodeset, and the number of nodes if expr
+ * evaluates to a nodeset
+ */
+Handle<Value> LibAugeas::defvar(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() < 1 || args.Length() > 2) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value n_str(args[0]);
+    String::Utf8Value e_str(args[1]);
+
+    const char *name = *n_str;
+    const char *expr = *e_str;
+
+    int rc = aug_defvar(obj->m_aug, name, args[1]->IsUndefined() ? NULL : expr);
+    if (-1 == rc) {
+        throw_aug_error_msg(obj->m_aug);
+        return scope.Close(Undefined());
+    } else {
+        return scope.Close(Number::New(rc));
+    }
+
 }
 
 /*
