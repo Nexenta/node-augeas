@@ -556,7 +556,7 @@ void saveAfter(uv_work_t* req)
     HandleScope scope;
 
     SaveUV *suv = static_cast<SaveUV*>(req->data);
-    Local<Value> argv[] = {Local<Boolean>::New(Boolean::New(0 == suv->rc))};
+    Local<Value> argv[] = {Integer::New(suv->rc)};
 
     TryCatch try_catch;
     suv->callback->Call(Context::GetCurrent()->Global(), 1, argv);
@@ -581,8 +581,8 @@ void saveAfter(uv_work_t* req)
  * The only argument allowed is a callback function.
  * If such an argument is given this function performs
  * non-blocking (async) saving, and after saving is done (or failed)
- * executes the callback with one boolean argument: true on success saving
- * and false on failure.
+ * executes the callback with one integer argument - return value of aug_save(),
+ * i. e. 0 on success, -1 on failure.
  *
  * NOTE: multiple async calls of this function (from the same augeas object)
  * will result in crash (double free or segfault) because of using
