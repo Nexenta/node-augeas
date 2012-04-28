@@ -24,20 +24,25 @@ extern "C" { // Yes, that bad
 using namespace v8;
 
 
-inline void throw_aug_error_msg(augeas *aug)
+inline std::string aug_error_msg(augeas *aug)
 {
     std::string msg = aug_error_message(aug);
     const char *minor = aug_error_minor_message(aug);
     const char *details = aug_error_details(aug);
     if (NULL != minor) {
-        msg += ": ";
+        msg += " - ";
         msg += minor;
     }
     if (NULL != details) {
-        msg += " -> ";
+        msg += ": ";
         msg += details;
     }
-    ThrowException(Exception::Error(String::New(msg.c_str())));
+    return msg;
+}
+
+inline void throw_aug_error_msg(augeas *aug)
+{
+    ThrowException(Exception::Error(String::New(aug_error_msg(aug).c_str())));
 }
 
 
@@ -99,6 +104,7 @@ protected:
     static Handle<Value> load       (const Arguments& args);
     static Handle<Value> insert     (const Arguments& args);
     static Handle<Value> error      (const Arguments& args);
+    static Handle<Value> errorMsg   (const Arguments& args);
 };
 
 Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
@@ -150,6 +156,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(load);
     _NEW_METHOD(insert);
     _NEW_METHOD(error);
+    _NEW_METHOD(errorMsg);
 
 
     constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
@@ -453,7 +460,7 @@ Handle<Value> LibAugeas::insert(const Arguments& args)
 
 /*
  * Wrapper of aug_error()
- * Return the error code from the last API call
+ * Returns the error code from the last API call
  */
 Handle<Value> LibAugeas::error(const Arguments& args)
 {
@@ -468,6 +475,24 @@ Handle<Value> LibAugeas::error(const Arguments& args)
 
     int rc = aug_error(obj->m_aug);
     return scope.Close(Int32::New(rc));
+}
+
+/*
+ * Returns the error message from the last API call,
+ * including all details.
+ */
+Handle<Value> LibAugeas::errorMsg(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 0) {
+        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    return scope.Close(String::New(aug_error_msg(obj->m_aug).c_str()));
 }
 
 
