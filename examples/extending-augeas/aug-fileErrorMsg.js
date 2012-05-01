@@ -1,7 +1,7 @@
 var libaugeas = require('../../build/Release/libaugeas');
 
 /*
- * This modules overrides function createAugeas() from libaugeas,
+ * This module overrides function createAugeas() from libaugeas,
  * so that created Augeas object has two additional functions:
  * fileErrorMsg(fname) and dumpFileErrors().
  */
