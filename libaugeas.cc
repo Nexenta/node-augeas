@@ -103,7 +103,8 @@ protected:
     static Handle<Value> nmatch     (const Arguments& args);
     static Handle<Value> match      (const Arguments& args);
     static Handle<Value> load       (const Arguments& args);
-    static Handle<Value> insert     (const Arguments& args);
+    static Handle<Value> insertAfter  (const Arguments& args);
+    static Handle<Value> insertBefore (const Arguments& args);
     static Handle<Value> error      (const Arguments& args);
     static Handle<Value> errorMsg   (const Arguments& args);
 };
@@ -156,7 +157,8 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(nmatch);
     _NEW_METHOD(match);
     _NEW_METHOD(load);
-    _NEW_METHOD(insert);
+    _NEW_METHOD(insertAfter);
+    _NEW_METHOD(insertBefore);
     _NEW_METHOD(error);
     _NEW_METHOD(errorMsg);
 
@@ -462,14 +464,13 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
 }
 
 /*
- * Wrapper of aug_insert() - insert node
- * The third argument (args[2]) is optional boolean, and is False by default.
+ * Wrapper of aug_insert(aug, path, label, 0) - insert 'label' after 'path'
  */
-Handle<Value> LibAugeas::insert(const Arguments& args)
+Handle<Value> LibAugeas::insertAfter(const Arguments& args)
 {
     HandleScope scope;
 
-    if (args.Length() < 2 || args.Length() > 3) {
+    if (args.Length() != 2) {
         ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
         return scope.Close(Undefined());
     }
@@ -481,19 +482,37 @@ Handle<Value> LibAugeas::insert(const Arguments& args)
     const char *path  = *p_str;
     const char *label = *l_str;
 
-    /*
-     * inserting into the tree just before path if 1,
-     * or just after path if 0
-     */
-    int before = args[2]->ToBoolean()->Value() ? 1 : 0;
-
-    int rc = aug_insert(obj->m_aug, path, label, before);
-    if (0 == rc) {
-        return scope.Close(Number::New(rc));
-    } else {
+    int rc = aug_insert(obj->m_aug, path, label, 0);
+    if (0 != rc) {
         throw_aug_error_msg(obj->m_aug);
+    }
+    return scope.Close(Undefined());
+}
+
+/*
+ * Wrapper of aug_insert(aug, path, label, 1) - insert 'label' before 'path'
+ */
+Handle<Value> LibAugeas::insertBefore(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 2) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
         return scope.Close(Undefined());
     }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value p_str(args[0]);
+    String::Utf8Value l_str(args[1]);
+
+    const char *path  = *p_str;
+    const char *label = *l_str;
+
+    int rc = aug_insert(obj->m_aug, path, label, 1);
+    if (0 != rc) {
+        throw_aug_error_msg(obj->m_aug);
+    }
+    return scope.Close(Undefined());
 }
 
 /*
