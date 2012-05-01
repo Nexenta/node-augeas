@@ -47,7 +47,7 @@ inline void throw_aug_error_msg(augeas *aug)
 
 /*
  * Helper function.
- * Converts object member *key into std::string.
+ * Converts value of object member *key into std::string.
  * Returns empty string if memder does not exist.
  */
 inline std::string memberToString(Handle<Object> obj, const char *key)
@@ -63,7 +63,7 @@ inline std::string memberToString(Handle<Object> obj, const char *key)
 
 /*
  * Helper function.
- * Converts object member *key into uint32.
+ * Converts value of object member *key into uint32.
  * Returns 0 if memder does not exist.
  */
 inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
@@ -289,7 +289,6 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
     } else {
         return scope.Close(Number::New(rc));
     }
-
 }
 
 /*
@@ -570,7 +569,7 @@ void saveAfter(uv_work_t* req)
     HandleScope scope;
 
     SaveUV *suv = static_cast<SaveUV*>(req->data);
-    Local<Value> argv[] = {Integer::New(suv->rc)};
+    Local<Value> argv[] = {Int32::New(suv->rc)};
 
     TryCatch try_catch;
     suv->callback->Call(Context::GetCurrent()->Global(), 1, argv);
@@ -584,10 +583,6 @@ void saveAfter(uv_work_t* req)
 
 /*
  * Wrapper of aug_save() - save changed files.
- * The exact behavior of aug_save can be
- * fine-tuned by modifying the node /augeas/save
- * prior to calling aug_save(). The valid values for this node are:
- * overwrite, backup, newfile, noop. See also flags for aug_init().
  *
  * Without arguments this function performs blocking saving
  * and throws an exception on error.
@@ -632,11 +627,10 @@ Handle<Value> LibAugeas::save(const Arguments& args)
 }
 
 /*
- * Wrapper of aug_match(, , NULL) - count all nodes matching path expression
+ * Wrapper of aug_match(aug, path, NULL) - count all nodes matching path expression
  * Returns the number of found nodes.
  * Note: aug_match() allocates memory if the third argument is not NULL,
- *       in this function we always set it to NULL and get only number
- *       of found nodes.
+ * in this function we always set it to NULL and get only number of found nodes.
  */
 Handle<Value> LibAugeas::nmatch(const Arguments& args)
 {
@@ -705,7 +699,7 @@ Handle<Value> LibAugeas::load(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 0) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
         return scope.Close(Undefined());
     }
 
@@ -835,7 +829,7 @@ void createAugeasAfter(uv_work_t* req)
  * Creates augeas object from JS side either in sync or async way
  * depending on the last argument:
  *
- * lib.createAugeas([...], function(aug) {..}) - async
+ * lib.createAugeas([...], function(aug) {...}) - async
  *
  * or:
  *
