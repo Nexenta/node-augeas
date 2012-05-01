@@ -361,12 +361,10 @@ Handle<Value> LibAugeas::set(const Arguments& args)
      * if more than one node matches path.
      */
     int rc = aug_set(obj->m_aug, path, value);
-    if (0 == rc) {
-        return scope.Close(Undefined());
-    } else {
+    if (0 != rc) {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
     }
+    return scope.Close(Undefined());
 }
 
 /*
@@ -455,12 +453,10 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
      * if more than one node matches path.
      */
     int rc = aug_mv(obj->m_aug, source, dest);
-    if (0 == rc) {
-        return scope.Close(Undefined());
-    } else {
+    if (0 != rc) {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
     }
+    return scope.Close(Undefined());
 }
 
 /*
