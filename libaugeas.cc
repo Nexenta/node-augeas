@@ -10,7 +10,6 @@
  */
 
 #include <string>
-#include <map>
 
 #define BUILDING_NODE_EXTENSION
 
