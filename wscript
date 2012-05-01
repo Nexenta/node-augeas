@@ -9,7 +9,7 @@ def configure(conf):
                 args='--cflags --libs',
                 mandatory=True)
 
-  # libxml2 is required sunce 0.10:
+  # libxml2 is required since 0.10:
   conf.check_cfg(package='libxml-2.0',
                 args='--cflags --libs',
                 mandatory=True)
