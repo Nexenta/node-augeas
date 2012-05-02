@@ -393,7 +393,7 @@ Handle<Value> LibAugeas::setm(const Arguments& args)
 
     int rc = aug_setm(obj->m_aug, base, sub, value);
     if (rc >= 0) {
-        return scope.Close(Number::New(rc));
+        return scope.Close(Int32::New(rc));
     } else {
         throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
