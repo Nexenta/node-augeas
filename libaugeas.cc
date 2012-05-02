@@ -282,6 +282,9 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
     const char *name = *n_str;
     const char *expr = *e_str;
 
+    /* Returns -1 on error; on success, returns 0 if EXPR evaluates to anything
+     * other than a nodeset, and the number of nodes if EXPR evaluates to a nodeset
+     */
     int rc = aug_defvar(obj->m_aug, name, args[1]->IsUndefined() ? NULL : expr);
     if (-1 == rc) {
         throw_aug_error_msg(obj->m_aug);
@@ -359,7 +362,7 @@ Handle<Value> LibAugeas::set(const Arguments& args)
      * if more than one node matches path.
      */
     int rc = aug_set(obj->m_aug, path, value);
-    if (0 != rc) {
+    if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
     return scope.Close(Undefined());
@@ -451,7 +454,7 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
      * if more than one node matches path.
      */
     int rc = aug_mv(obj->m_aug, source, dest);
-    if (0 != rc) {
+    if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
     return scope.Close(Undefined());
@@ -477,7 +480,7 @@ Handle<Value> LibAugeas::insertAfter(const Arguments& args)
     const char *label = *l_str;
 
     int rc = aug_insert(obj->m_aug, path, label, 0);
-    if (0 != rc) {
+    if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
     return scope.Close(Undefined());
@@ -503,7 +506,7 @@ Handle<Value> LibAugeas::insertBefore(const Arguments& args)
     const char *label = *l_str;
 
     int rc = aug_insert(obj->m_aug, path, label, 1);
-    if (0 != rc) {
+    if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
     return scope.Close(Undefined());
@@ -608,7 +611,7 @@ Handle<Value> LibAugeas::save(const Arguments& args)
     // if no args, save files synchronously (blocking):
     if (args.Length() == 0) {
         int rc = aug_save(obj->m_aug);
-        if (0 != rc) {
+        if (AUG_NOERROR != rc) {
             ThrowException(Exception::Error(String::New("Failed to write files")));
         }
         // single argument is a function - async:
@@ -710,7 +713,7 @@ Handle<Value> LibAugeas::load(const Arguments& args)
      * as '/augeas//error'.
      */
     int rc = aug_load(obj->m_aug);
-    if (0 != rc) {
+    if (AUG_NOERROR != rc) {
         ThrowException(Exception::Error(String::New("Failed to load files")));
     }
 
