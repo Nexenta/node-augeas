@@ -223,20 +223,28 @@ Handle<Value> LibAugeas::New(const Arguments& args)
     std::string loadpath;
     unsigned int flags = 0;
 
-    if (args[0]->IsString()) {
-        String::Utf8Value p_str(args[0]);
-        root = *p_str;
+    // Allow passing options in object:
+    if (args[0]->IsObject()) {
+        Local<Object> obj = args[0]->ToObject();
+        root     = memberToString(obj, "root");
+        loadpath = memberToString(obj, "loadpath");
+        flags    = memberToUint32(obj, "flags");
+    } else {
+        // C-like way:
+        if (args[0]->IsString()) {
+            String::Utf8Value p_str(args[0]);
+            root = *p_str;
+        }
+        if (args[1]->IsString()) {
+            String::Utf8Value l_str(args[1]);
+            loadpath = *l_str;
+        }
+        if (args[2]->IsNumber()) {
+            flags = args[2]->Uint32Value();
+        }
     }
-    if (args[1]->IsString()) {
-        String::Utf8Value l_str(args[1]);
-        loadpath = *l_str;
-    }
-    if (args[2]->IsNumber()) {
-        flags = args[2]->Int32Value();
-    }
-
-    obj->m_aug = aug_init(root.length() ? root.c_str() : NULL,
-                          loadpath.length() ? loadpath.c_str() : NULL, flags);
+    
+    obj->m_aug = aug_init(root.c_str(), loadpath.c_str(), flags);
 
     /*
      * If flags have AUG_NO_ERR_CLOSE aug_init() might return non-null
