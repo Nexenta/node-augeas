@@ -244,14 +244,10 @@ Handle<Value> LibAugeas::New(const Arguments& args)
         }
     }
     
-    obj->m_aug = aug_init(root.c_str(), loadpath.c_str(), flags);
+    obj->m_aug = aug_init(root.c_str(), loadpath.c_str(), flags | AUG_NO_ERR_CLOSE);
 
-    /*
-     * If flags have AUG_NO_ERR_CLOSE aug_init() might return non-null
-     * augeas handle which can be used to get error code and message.
-     */
-    if (NULL == obj->m_aug) {
-        ThrowException(Exception::Error(String::New("aug_init() failed")));
+    if (NULL == obj->m_aug) { // should not happen
+        ThrowException(Exception::Error(String::New("aug_init() badly failed")));
         return scope.Close(Undefined());
     } else if (AUG_NOERROR != aug_error(obj->m_aug)) {
         throw_aug_error_msg(obj->m_aug);
