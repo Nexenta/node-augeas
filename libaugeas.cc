@@ -93,6 +93,7 @@ protected:
     static Handle<Value> New(const Arguments& args);
 
     static Handle<Value> defvar     (const Arguments& args);
+    static Handle<Value> defnode    (const Arguments& args);
     static Handle<Value> get        (const Arguments& args);
     static Handle<Value> set        (const Arguments& args);
     static Handle<Value> setm       (const Arguments& args);
@@ -147,6 +148,7 @@ void LibAugeas::Init(Handle<Object> target)
 // I do not want copy-n-paste errors here:
 #define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(augeasTemplate, #m, m)
     _NEW_METHOD(defvar);
+    _NEW_METHOD(defnode);
     _NEW_METHOD(get);
     _NEW_METHOD(set);
     _NEW_METHOD(setm);
@@ -294,6 +296,70 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
         throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     } else {
+        return scope.Close(Number::New(rc));
+    }
+}
+
+/*
+ * Wrapper of aug_defnode() - define a node.
+ * The defnode command is very useful when you add a node
+ * that you need to modify further, e. g. by adding children to it.
+ *
+ * On error, throws an exception and returns undefined;
+ * on success, returns the number of nodes in the nodeset (>= 0)
+ * 
+ * Arguments:
+ * name - required
+ * expr - required
+ * value - optional
+ * callback - optional
+ *
+ * The last argument could be a function. It will be called (synchronously)
+ * with one argument set to 1 if a node was created, and 0 if it already existed. 
+ */
+Handle<Value> LibAugeas::defnode(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() < 2 || args.Length() > 4) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value n_str(args[0]);
+    String::Utf8Value e_str(args[1]);
+    String::Utf8Value v_str(args[2]);
+
+    const char *name = *n_str;
+    const char *expr = *e_str;
+    const char *value = ""; // can't be NULL: aug_get will cause segfault
+    if (!args[2]->IsUndefined() && !args[2]->IsFunction()) {
+        value = *v_str;
+    }
+    int created;
+
+    /* Returns -1 on error; on success, returns
+     * the number of nodes in the nodeset, set created=1 if node created,
+     * set created=0 if node already existed.
+     */
+    int rc = aug_defnode(obj->m_aug, name, expr, value, &created);
+    if (-1 == rc) {
+        throw_aug_error_msg(obj->m_aug);
+        return scope.Close(Undefined());
+    } else {
+        int last = args.Length() - 1;
+        if (args[last]->IsFunction()) {
+            Local<Function> cb =  Local<Function>::Cast(args[last]);
+
+            Local<Value> argv[] = {Local<Boolean>::New(Boolean::New(created == 1))};
+
+            TryCatch try_catch;
+            cb->Call(Context::GetCurrent()->Global(), 1, argv);
+            if (try_catch.HasCaught()) {
+                node::FatalException(try_catch);
+            }
+        }
         return scope.Close(Number::New(rc));
     }
 }
