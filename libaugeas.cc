@@ -41,7 +41,13 @@ inline std::string aug_error_msg(augeas *aug)
 
 inline void throw_aug_error_msg(augeas *aug)
 {
-    ThrowException(Exception::Error(String::New(aug_error_msg(aug).c_str())));
+    if (AUG_NOERROR != aug_error(aug)) {
+        ThrowException(Exception::Error(String::New(aug_error_msg(aug).c_str())));
+    } else {
+        ThrowException(Exception::Error(
+            String::New(
+                "An error has occured from Augeas API call, but no description available")));
+    }
 }
 
 
