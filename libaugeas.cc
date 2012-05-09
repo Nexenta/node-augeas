@@ -321,7 +321,7 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
  * callback - optional
  *
  * The last argument could be a function. It will be called (synchronously)
- * with one argument set to 1 if a node was created, and 0 if it already existed. 
+ * with one argument set to True if a node was created, and False if it already existed. 
  */
 Handle<Value> LibAugeas::defnode(const Arguments& args)
 {
