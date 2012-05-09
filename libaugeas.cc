@@ -339,7 +339,7 @@ Handle<Value> LibAugeas::defnode(const Arguments& args)
 
     const char *name = *n_str;
     const char *expr = *e_str;
-    const char *value = ""; // can't be NULL: aug_get will cause segfault
+    const char *value = NULL;
     if (!args[2]->IsUndefined() && !args[2]->IsFunction()) {
         value = *v_str;
     }
@@ -400,7 +400,11 @@ Handle<Value> LibAugeas::get(const Arguments& args)
      */
     int rc = aug_get(obj->m_aug, path, &value);
     if (1 == rc) {
-        return scope.Close(String::New(value));
+        if (NULL != value) {
+            return scope.Close(String::New(value));
+        } else {
+            return scope.Close(Null());
+        }
     } else if (0 == rc) {
         return scope.Close(Undefined());
     } else if (rc < 0) {
