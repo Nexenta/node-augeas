@@ -400,7 +400,11 @@ Handle<Value> LibAugeas::get(const Arguments& args)
      */
     int rc = aug_get(obj->m_aug, path, &value);
     if (1 == rc) {
+      if (value) {
         return scope.Close(String::New(value));
+      } else {
+        return scope.Close(Null());
+      }
     } else if (0 == rc) {
         return scope.Close(Undefined());
     } else if (rc < 0) {
