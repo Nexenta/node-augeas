@@ -45,8 +45,8 @@ inline void throw_aug_error_msg(augeas *aug)
         ThrowException(Exception::Error(String::New(aug_error_msg(aug).c_str())));
     } else {
         ThrowException(Exception::Error(
-            String::New(
-                "An error has occured from Augeas API call, but no description available")));
+                           String::New(
+                               "An error has occured from Augeas API call, but no description available")));
     }
 }
 
@@ -885,6 +885,7 @@ struct CreateAugeasUV {
     std::string lens;
     std::string incl;
     std::string excl;
+    std::string srun;
     unsigned int flags;
     augeas *aug;
 };
@@ -910,14 +911,22 @@ void createAugeasWork(uv_work_t *req)
     // XXX: AUG_NO_MODL_AUTOLOAD implies AUG_NO_LOAD
     if (!her->lens.empty()) {
         flags |= AUG_NO_MODL_AUTOLOAD;
-    } else {
-        flags &= ~AUG_NO_MODL_AUTOLOAD;
     }
 
     her->aug = aug_init(her->root.c_str(), her->loadpath.c_str(), flags);
     rc = aug_error(her->aug);
     if (AUG_NOERROR != rc)
         return;
+
+    /*
+     * Consider lens/incl/excl interface obsolete.
+     * With srun: respect all flags (AUG_NO_MODL_AUTOLOAD, AUG_NO_LOAD),
+     * execute srun commands and return.
+     */
+    if (!her->srun.empty()) {
+        rc = aug_srun(her->aug, NULL, her->srun.c_str());
+        return;
+    }
 
     if (!her->lens.empty()) {
         // specifying which lens to load
@@ -1002,12 +1011,7 @@ Handle<Value> createAugeas(const Arguments& args)
         her->callback = Persistent<Function>::New(
                             Local<Function>::Cast(args[args.Length()-1]));
 
-        /* TODO:
-         * Use more then one object.
-         * From JS point it might look like this:
-         * createAugeas({root:..., loadpath:..., lens:...}, {lens:...}, {lens:...}, ..., callback);
-         * In the first object there might be root, loadpath or flags members, and lenses
-         * might be omitted. In other objects only lens, incl and excl members should be allowed.
+        /*
          * ** flags are filterred in createAugeasWork() **
          */
         if (args[0]->IsObject()) {
@@ -1018,6 +1022,13 @@ Handle<Value> createAugeas(const Arguments& args)
             her->lens = memberToString(obj, "lens");
             her->incl = memberToString(obj, "incl");
             her->excl = memberToString(obj, "excl");
+
+            Local<Value> srun = obj->Get(Local<String>(String::New("srun")));
+            if (srun->IsArray()) {
+                her->srun = join(Local<Array>::Cast(srun));
+            } else {
+                her->srun = memberToString(obj, "srun");
+            }
         }
 
         uv_queue_work(uv_default_loop(), &her->request,
