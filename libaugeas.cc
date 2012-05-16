@@ -82,6 +82,22 @@ inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
     }
 }
 
+inline std::string join(Local<Array> a)
+{
+    std::string res;
+    uint32_t len = a->Length();
+    if (len > 0) {
+        for (uint32_t i = 0; i < len - 1; ++i) {
+            String::Utf8Value v(a->Get(i));
+            res.append(*v);
+            res.append("\n");
+        }
+        String::Utf8Value v(a->Get(len-1));
+        res.append(*v);
+    }
+    return res;
+}
+
 class LibAugeas : public node::ObjectWrap {
 public:
     static void Init(Handle<Object> target);
@@ -109,6 +125,7 @@ protected:
     static Handle<Value> nmatch     (const Arguments& args);
     static Handle<Value> match      (const Arguments& args);
     static Handle<Value> load       (const Arguments& args);
+    static Handle<Value> srun       (const Arguments& args);
     static Handle<Value> insertAfter  (const Arguments& args);
     static Handle<Value> insertBefore (const Arguments& args);
     static Handle<Value> error      (const Arguments& args);
@@ -164,6 +181,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(nmatch);
     _NEW_METHOD(match);
     _NEW_METHOD(load);
+    _NEW_METHOD(srun);
     _NEW_METHOD(insertAfter);
     _NEW_METHOD(insertBefore);
     _NEW_METHOD(error);
@@ -251,7 +269,7 @@ Handle<Value> LibAugeas::New(const Arguments& args)
             flags = args[2]->Uint32Value();
         }
     }
-    
+
     obj->m_aug = aug_init(root.c_str(), loadpath.c_str(), flags | AUG_NO_ERR_CLOSE);
 
     if (NULL == obj->m_aug) { // should not happen
@@ -313,7 +331,7 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
  *
  * On error, throws an exception and returns undefined;
  * on success, returns the number of nodes in the nodeset (>= 0)
- * 
+ *
  * Arguments:
  * name - required
  * expr - required
@@ -321,7 +339,7 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
  * callback - optional
  *
  * The last argument could be a function. It will be called (synchronously)
- * with one argument set to True if a node was created, and False if it already existed. 
+ * with one argument set to True if a node was created, and False if it already existed.
  */
 Handle<Value> LibAugeas::defnode(const Arguments& args)
 {
@@ -798,6 +816,51 @@ Handle<Value> LibAugeas::load(const Arguments& args)
     }
 
     return scope.Close(Undefined());
+}
+
+/*
+ * Wrapper of aug_srun() - run augeas commands (like augtool does)
+ * Returns the number of executed commands.
+ * Throws expression on error or if the 'quit' command encountered.
+ * Arguments:
+ * string or array of strings
+ */
+Handle<Value> LibAugeas::srun(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 1) {
+        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    std::string text;
+
+    if (args[0]->IsArray()) {
+        text = join(Local<Array>::Cast(args[0]));
+    } else {
+        String::Utf8Value t_str(args[0]);
+        text = *t_str;
+    }
+
+    /*
+     * The output of the commands will be printed to OUT.
+     * returns the number of executed commands on success,
+     * -1 on failure, and -2 if a 'quit' command was encountered.
+     * TODO: use output (the second argument to aug_srun() != NULL)
+     */
+    int rc = aug_srun(obj->m_aug, NULL, text.c_str());
+    if (rc >= 0) {
+        return scope.Close(Number::New(rc));
+    } else if (-1 == rc) {
+        throw_aug_error_msg(obj->m_aug);
+    } else if (-2 == rc) {
+        ThrowException(Exception::Error(String::New("'quit' command was encountered")));
+    } else {
+        ThrowException(Exception::Error(String::New("Unexpected return code from aug_srun()")));
+    }
 }
 
 
