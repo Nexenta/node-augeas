@@ -82,6 +82,9 @@ inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
     }
 }
 
+/* Helper function.
+ * Joins JS array by new line.
+ */
 inline std::string join(Local<Array> a)
 {
     std::string res;
