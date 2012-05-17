@@ -82,7 +82,8 @@ inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
     }
 }
 
-/* Helper function.
+/*
+ * Helper function.
  * Joins JS array by new line.
  */
 inline std::string join(Local<Array> a)
@@ -399,7 +400,7 @@ Handle<Value> LibAugeas::get(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
         return scope.Close(Undefined());
     }
 
@@ -414,8 +415,7 @@ Handle<Value> LibAugeas::get(const Arguments& args)
      * 0 if there is none, and a negative value
      * if there is more than one node matching PATH,
      * or if PATH is not a legal path expression.
-     */
-    /*
+     *
      * The string *value must not be freed by the caller,
      * and is valid as long as its node remains unchanged.
      */
@@ -447,7 +447,7 @@ Handle<Value> LibAugeas::set(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
         return scope.Close(Undefined());
     }
 
@@ -478,7 +478,7 @@ Handle<Value> LibAugeas::setm(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 3) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly three arguments")));
         return scope.Close(Undefined());
     }
 
@@ -512,7 +512,7 @@ Handle<Value> LibAugeas::rm(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
         return scope.Close(Undefined());
     }
 
@@ -539,7 +539,7 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
         return scope.Close(Undefined());
     }
 
@@ -569,7 +569,7 @@ Handle<Value> LibAugeas::insertAfter(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
         return scope.Close(Undefined());
     }
 
@@ -595,7 +595,7 @@ Handle<Value> LibAugeas::insertBefore(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
         return scope.Close(Undefined());
     }
 
@@ -741,7 +741,7 @@ Handle<Value> LibAugeas::nmatch(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
         return scope.Close(Undefined());
     }
 
@@ -768,7 +768,7 @@ Handle<Value> LibAugeas::match(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
         return scope.Close(Undefined());
     }
 
@@ -809,7 +809,8 @@ Handle<Value> LibAugeas::load(const Arguments& args)
 
     LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
 
-    /* aug_load() returns -1 on error, 0 on success. Success includes the case
+    /*
+     * aug_load() returns -1 on error, 0 on success. Success includes the case
      * where some files could not be loaded. Details of such files can be found
      * as '/augeas//error'.
      */
@@ -833,7 +834,7 @@ Handle<Value> LibAugeas::srun(const Arguments& args)
     HandleScope scope;
 
     if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
         return scope.Close(Undefined());
     }
 
@@ -849,8 +850,7 @@ Handle<Value> LibAugeas::srun(const Arguments& args)
     }
 
     /*
-     * The output of the commands will be printed to OUT.
-     * returns the number of executed commands on success,
+     * Returns the number of executed commands on success,
      * -1 on failure, and -2 if a 'quit' command was encountered.
      * TODO: use output (the second argument to aug_srun() != NULL)
      */
@@ -1011,9 +1011,6 @@ Handle<Value> createAugeas(const Arguments& args)
         her->callback = Persistent<Function>::New(
                             Local<Function>::Cast(args[args.Length()-1]));
 
-        /*
-         * ** flags are filterred in createAugeasWork() **
-         */
         if (args[0]->IsObject()) {
             Local<Object> obj = args[0]->ToObject();
             her->root = memberToString(obj, "root");
