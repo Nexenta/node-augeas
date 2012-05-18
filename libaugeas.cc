@@ -134,6 +134,9 @@ protected:
     static Handle<Value> insertBefore (const Arguments& args);
     static Handle<Value> error      (const Arguments& args);
     static Handle<Value> errorMsg   (const Arguments& args);
+    static Handle<Value> errorLens  (const Arguments& args);
+    static Handle<Value> errorIncl  (const Arguments& args);
+    static Handle<Value> print      (const Arguments& args);
 };
 
 Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
@@ -190,7 +193,9 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(insertBefore);
     _NEW_METHOD(error);
     _NEW_METHOD(errorMsg);
-
+    _NEW_METHOD(errorLens);
+    _NEW_METHOD(errorIncl);
+    _NEW_METHOD(print);
 
     constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
 
@@ -650,7 +655,67 @@ Handle<Value> LibAugeas::errorMsg(const Arguments& args)
     return scope.Close(String::New(aug_error_msg(obj->m_aug).c_str()));
 }
 
+/*
+ * Returns the lens load error message
+ */
+Handle<Value> LibAugeas::errorLens(const Arguments& args)
+{
+    HandleScope scope;
+    const char *val;
 
+    if (args.Length() != 1) {
+        ThrowException(Exception::TypeError(String::New("Function expects lens argument")));
+        return scope.Close(Undefined());
+    }
+    String::Utf8Value lens(args[0]);
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    std::string errPath = "/augeas/load/" + std::string(*lens) + "/error";
+    if (aug_get(obj->m_aug, errPath.c_str(), &val))
+        return scope.Close(String::New(val));
+
+    return scope.Close(Undefined());
+}
+
+/*
+ * Returns the incl parsed error message
+ */
+Handle<Value> LibAugeas::errorIncl(const Arguments& args)
+{
+    HandleScope scope;
+    int mres;
+    const char *val;
+    char **matches;
+
+    if (args.Length() != 1) {
+        ThrowException(Exception::TypeError(String::New("Function expects incl argument")));
+        return scope.Close(Undefined());
+    }
+    String::Utf8Value incl(args[0]);
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+
+    std::string errPath = "/augeas/files" + std::string(*incl) + "/error";
+    mres = aug_match(obj->m_aug, errPath.c_str(), &matches);
+    if (mres) {
+        Local<Object> res = Object::New();
+
+        if (aug_get(obj->m_aug, std::string(errPath + "/line").c_str(), &val)) {
+            res->Set(Local<String>::New(String::New("line")),
+                     Local<String>::New(String::New(val)));
+        }
+        if (aug_get(obj->m_aug,
+                    std::string(errPath + "/message").c_str(), &val)) {
+            res->Set(Local<String>::New(String::New("message")),
+                     Local<String>::New(String::New(val)));
+        }
+        free(matches);
+        return scope.Close(res);
+    }
+
+    return scope.Close(Undefined());
+}
 
 struct SaveUV {
     uv_work_t request;
@@ -793,6 +858,58 @@ Handle<Value> LibAugeas::match(const Arguments& args)
         throw_aug_error_msg(obj->m_aug);
         return scope.Close(Undefined());
     }
+}
+
+/*
+ * Wrapper of aug_print().
+ * Returns an object of key/value matching given path expression
+ */
+Handle<Value> LibAugeas::print(const Arguments& args)
+{
+    HandleScope scope;
+
+    if (args.Length() != 1) {
+        ThrowException(Exception::TypeError(String::New("Function expects incl argument")));
+        return scope.Close(Undefined());
+    }
+
+    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    String::Utf8Value incl(args[0]);
+    Local<Object> res = Object::New();
+
+    std::string matchPath = "/files" + std::string(*incl) + "/*";
+    FILE *out = tmpfile();
+    if (aug_print(obj->m_aug, out, matchPath.c_str()) == 0) {
+        char line[256];
+        rewind(out);
+        while(fgets(line, 256, out) != NULL) {
+            // remove end of line
+            line[strlen(line) - 1] = '\0';
+            std::string s = line;;
+            // skip comments
+            if (s.find("#comment") != std::string::npos)
+                continue;
+            s = s.substr(matchPath.length() - 1);
+            // split by '=' sign
+            size_t eqpos = s.find(" = ");
+            if (eqpos == std::string::npos)
+                continue;
+            // extract key and value
+            std::string key = s.substr(0, eqpos);
+            std::string value = s.substr(eqpos + 3);
+            // remove '"' sign from around value
+            value.erase(value.begin());
+            value.erase(value.end() - 1);
+            res->Set(Local<String>::New(String::New(key.c_str())),
+                     Local<String>::New(String::New(value.c_str())));
+        }
+
+        fclose(out);
+        return scope.Close(res);
+    }
+
+    fclose(out);
+    return scope.Close(Undefined());
 }
 
 /*
