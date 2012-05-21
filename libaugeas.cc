@@ -106,7 +106,6 @@ class LibAugeas : public node::ObjectWrap {
 public:
     static void Init(Handle<Object> target);
     static Local<Object> New(augeas *aug);
-    static Handle<Value> NewInstance(const Arguments& args);
 
 protected:
     augeas * m_aug;
@@ -115,8 +114,6 @@ protected:
 
     static Persistent<FunctionTemplate> augeasTemplate;
     static Persistent<Function> constructor;
-
-    static Handle<Value> New(const Arguments& args);
 
     static Handle<Value> defvar     (const Arguments& args);
     static Handle<Value> defnode    (const Arguments& args);
@@ -171,7 +168,7 @@ void LibAugeas::Init(Handle<Object> target)
     NODE_DEFINE_CONSTANT(target, AUG_ECMDRUN);
     NODE_DEFINE_CONSTANT(target, AUG_EBADARG);
 
-    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New(New));
+    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New());
     augeasTemplate->SetClassName(String::NewSymbol("Augeas"));
     augeasTemplate->InstanceTemplate()->SetInternalFieldCount(1);
 
@@ -198,8 +195,6 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(print);
 
     constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
-
-    target->Set(String::NewSymbol("Augeas"), constructor);
 }
 
 /*
@@ -216,84 +211,6 @@ Local<Object> LibAugeas::New(augeas *aug)
     return O;
 }
 
-
-/*
- * Creates an JS object from this C++ code,
- * passing arguments received from JS code to
- * the constructor LibAugeas::New(const Arguments& args)
- */
-Handle<Value> LibAugeas::NewInstance(const Arguments& args)
-{
-    HandleScope scope;
-    Handle<Value> *argv = NULL;
-
-    int argc = args.Length();
-    if (argc > 0) {
-        argv = new Handle<Value>[argc];
-        assert(argv != NULL);
-        for (int i = 0; i < argc; ++i) {
-            argv[i] = args[i];
-        }
-    }
-
-    Local<Object> instance = constructor->NewInstance(argc, argv);
-
-    if (NULL != argv)
-        delete [] argv;
-
-    return scope.Close(instance);
-}
-
-/*
- * This function is used as a constructor from JS side via
- * var aug = new lib.Augeas(...);
- */
-Handle<Value> LibAugeas::New(const Arguments& args)
-{
-    HandleScope scope;
-
-    LibAugeas *obj = new LibAugeas();
-
-    std::string root;
-    std::string loadpath;
-    unsigned int flags = 0;
-
-    // Allow passing options in object:
-    if (args[0]->IsObject()) {
-        Local<Object> obj = args[0]->ToObject();
-        root     = memberToString(obj, "root");
-        loadpath = memberToString(obj, "loadpath");
-        flags    = memberToUint32(obj, "flags");
-    } else {
-        // C-like way:
-        if (args[0]->IsString()) {
-            String::Utf8Value p_str(args[0]);
-            root = *p_str;
-        }
-        if (args[1]->IsString()) {
-            String::Utf8Value l_str(args[1]);
-            loadpath = *l_str;
-        }
-        if (args[2]->IsNumber()) {
-            flags = args[2]->Uint32Value();
-        }
-    }
-
-    obj->m_aug = aug_init(root.c_str(), loadpath.c_str(), flags | AUG_NO_ERR_CLOSE);
-
-    if (NULL == obj->m_aug) { // should not happen
-        ThrowException(Exception::Error(String::New("aug_init() badly failed")));
-        return scope.Close(Undefined());
-    } else if (AUG_NOERROR != aug_error(obj->m_aug)) {
-        throw_aug_error_msg(obj->m_aug);
-        aug_close(obj->m_aug);
-        return scope.Close(Undefined());
-    }
-
-    obj->Wrap(args.This());
-
-    return args.This();
-}
 
 /*
  * Wrapper of aug_defvar() - define a variable
@@ -1018,19 +935,14 @@ void createAugeasWork(uv_work_t *req)
 
     CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
 
-    unsigned int flags;
-
-    // Always set AUG_NO_ERR_CLOSE:
-    flags = AUG_NO_ERR_CLOSE | her->flags;
-
     // do not load all lenses if a specific lens is given,
     // ignore any setting in flags.
     // XXX: AUG_NO_MODL_AUTOLOAD implies AUG_NO_LOAD
     if (!her->lens.empty()) {
-        flags |= AUG_NO_MODL_AUTOLOAD;
+        her->flags |= AUG_NO_MODL_AUTOLOAD;
     }
 
-    her->aug = aug_init(her->root.c_str(), her->loadpath.c_str(), flags);
+    her->aug = aug_init(her->root.c_str(), her->loadpath.c_str(), her->flags);
     rc = aug_error(her->aug);
     if (AUG_NOERROR != rc)
         return;
@@ -1101,20 +1013,48 @@ void createAugeasAfter(uv_work_t* req)
 }
 
 /*
- * Creates augeas object from JS side either in sync or async way
+ * Creates an Augeas object from JS side either in sync or async way
  * depending on the last argument:
  *
- * lib.createAugeas([...], function(aug) {...}) - async
+ * augeas.createAugeas([...], function(aug) {...}) - async
  *
  * or:
  *
- * var aug = lib.createAugeas([...]) - sync
+ * var aug = augeas.createAugeas([...]) - sync
  *
- * The latter is equivalent to var aug = new lib.Augeas([...]);
  */
 Handle<Value> createAugeas(const Arguments& args)
 {
     HandleScope scope;
+
+    // options for aug_init(root, loadpath, flags):
+    std::string root;
+    std::string loadpath;
+    unsigned int flags;
+
+    // Allow passing options as an JS object:
+    if (args[0]->IsObject()) {
+        Local<Object> obj = args[0]->ToObject();
+        root     = memberToString(obj, "root");
+        loadpath = memberToString(obj, "loadpath");
+        flags    = memberToUint32(obj, "flags");
+    } else {
+        // C-like way:
+        if (args[0]->IsString()) {
+            String::Utf8Value p_str(args[0]);
+            root = *p_str;
+        }
+        if (args[1]->IsString()) {
+            String::Utf8Value l_str(args[1]);
+            loadpath = *l_str;
+        }
+        if (args[2]->IsNumber()) {
+            flags = args[2]->Uint32Value();
+        }
+    }
+
+    // always set to be able to get error messages, if aug_init() failed:
+    flags |= AUG_NO_ERR_CLOSE;
 
     /*
      * If the last argument is a function, create augeas
@@ -1128,11 +1068,13 @@ Handle<Value> createAugeas(const Arguments& args)
         her->callback = Persistent<Function>::New(
                             Local<Function>::Cast(args[args.Length()-1]));
 
+        her->root = root;
+        her->loadpath = loadpath;
+        her->flags = flags;
+
+        // Extra options for async mode:
         if (args[0]->IsObject()) {
             Local<Object> obj = args[0]->ToObject();
-            her->root = memberToString(obj, "root");
-            her->loadpath = memberToString(obj, "loadpath");
-            her->flags = memberToUint32(obj, "flags");
             her->lens = memberToString(obj, "lens");
             her->incl = memberToString(obj, "incl");
             her->excl = memberToString(obj, "excl");
@@ -1150,7 +1092,20 @@ Handle<Value> createAugeas(const Arguments& args)
 
         return scope.Close(Undefined());
     } else { // sync
-        return scope.Close(LibAugeas::NewInstance(args));
+
+        augeas *aug = aug_init(root.c_str(), loadpath.c_str(), flags);
+
+        if (NULL == aug) { // should not happen due to AUG_NO_ERR_CLOSE
+            ThrowException(Exception::Error(
+                               String::New("aug_init() badly failed: it should not return NULL, but it did.")));
+            return scope.Close(Undefined());
+        } else if (AUG_NOERROR != aug_error(aug)) {
+            throw_aug_error_msg(aug);
+            aug_close(aug);
+            return scope.Close(Undefined());
+        }
+
+        return scope.Close(LibAugeas::New(aug));
     }
 }
 
