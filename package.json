@@ -10,6 +10,7 @@
             "email": "gregg.thomason@asti-usa.com"
         }
     ],
+    "scripts":{"preinstall": "node-gyp clean configure build"},
     "lib": ".",
     "dependencies": {}
 }
