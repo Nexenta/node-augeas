@@ -1,4 +1,4 @@
-var libaugeas = require('../build/Release/libaugeas');
+var libaugeas = require('../build/Release/augeas');
 
 var createAugeas = libaugeas.createAugeas;
 
