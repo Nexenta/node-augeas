@@ -1,11 +1,15 @@
 {
-    "name" : "libaugeas",
-    "version" : "0.0.1",
-    "description" : "Bindings to augeas configuration tool",
-    "url" : "http://github.com/Nexenta/node-augeas",
-    "keywords" : ["parser", "configuration", "puppet", "chef"],
-    "author" : "Nexenta Systems <support@nexenta.com>",
-    "contributors" : [],
-    "lib" : ".",
-    "dependencies" : {}
+    "name": "libaugeas",
+    "version": "0.0.2",
+    "description": "Bindings to augeas configuration tool",
+    "url": "http://github.com/neurobashing/node-augeas",
+    "keywords": ["parser", "configuration", "puppet", "chef"],
+    "author": "Nexenta Systems <support@nexenta.com>",
+    "contributors": [{
+            "name": "J. Gregg Thomason",
+            "email": "gregg.thomason@asti-usa.com"
+        }
+    ],
+    "lib": ".",
+    "dependencies": {}
 }
