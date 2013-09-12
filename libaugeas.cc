@@ -11,7 +11,7 @@
 
 #include <string>
 
-#define BUILDING_NODE_EXTENSION
+#define BUILDING_NODE_EXTENSION 1
 
 // node.h includes v8.h
 #include <node.h>
@@ -704,7 +704,7 @@ Handle<Value> LibAugeas::save(const Arguments& args)
         suv->aug = obj->m_aug;
         suv->callback = Persistent<Function>::New(
                             Local<Function>::Cast(args[0]));
-        uv_queue_work(uv_default_loop(), &suv->request, saveWork, saveAfter);
+        uv_queue_work(uv_default_loop(), &suv->request, saveWork, (uv_after_work_cb) saveAfter);
     } else {
         ThrowException(Exception::Error(String::New("Callback function or nothing")));
     }
@@ -1088,7 +1088,7 @@ Handle<Value> createAugeas(const Arguments& args)
         }
 
         uv_queue_work(uv_default_loop(), &her->request,
-                      createAugeasWork, createAugeasAfter);
+                      createAugeasWork, (uv_after_work_cb) createAugeasAfter);
 
         return scope.Close(Undefined());
     } else { // sync
@@ -1119,5 +1119,5 @@ void init(Handle<Object> target)
                 FunctionTemplate::New(createAugeas)->GetFunction());
 }
 
-NODE_MODULE(libaugeas, init)
+NODE_MODULE(augeas, init)
 

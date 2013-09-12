@@ -1,4 +1,4 @@
-var aug = require('../build/Release/libaugeas');
+var aug = require('../build/Release/augeas');
 
 
 /* 

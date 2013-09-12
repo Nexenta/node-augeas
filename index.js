@@ -11,9 +11,9 @@
 
 var libaugeas;
 try {
-        libaugeas = require('./build/Release/libaugeas');
+        libaugeas = require('./build/Release/augeas');
 } catch (e) {
-        libaugeas = require('./libaugeas');
+        libaugeas = require('./augeas');
 }
 
 module.exports = libaugeas;

@@ -1,5 +1,5 @@
 {
-    "name" : "augeas",
+    "name" : "libaugeas",
     "version" : "0.0.1",
     "description" : "Bindings to augeas configuration tool",
     "url" : "http://github.com/Nexenta/node-augeas",
