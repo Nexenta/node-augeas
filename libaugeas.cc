@@ -898,6 +898,7 @@ Handle<Value> LibAugeas::srun(const Arguments& args)
     } else {
         ThrowException(Exception::Error(String::New("Unexpected return code from aug_srun()")));
     }
+    return scope.Close(Undefined());
 }
 
 
@@ -1030,7 +1031,7 @@ Handle<Value> createAugeas(const Arguments& args)
     // options for aug_init(root, loadpath, flags):
     std::string root;
     std::string loadpath;
-    unsigned int flags;
+    unsigned int flags = 0;
 
     // Allow passing options as an JS object:
     if (args[0]->IsObject()) {
