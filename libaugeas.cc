@@ -10,6 +10,7 @@
  */
 
 #include <string>
+#include <cstring>
 
 #define BUILDING_NODE_EXTENSION 1
 
