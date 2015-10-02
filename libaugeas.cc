@@ -10,12 +10,12 @@
  */
 
 #include <string>
-#include <cstring>
 
 #define BUILDING_NODE_EXTENSION 1
 
 // node.h includes v8.h
 #include <node.h>
+#include <nan.h>
 
 extern "C" { // Yes, that bad
 #include <augeas.h>
@@ -43,11 +43,9 @@ inline std::string aug_error_msg(augeas *aug)
 inline void throw_aug_error_msg(augeas *aug)
 {
     if (AUG_NOERROR != aug_error(aug)) {
-        ThrowException(Exception::Error(String::New(aug_error_msg(aug).c_str())));
+        Nan::ThrowError(aug_error_msg(aug).c_str());
     } else {
-        ThrowException(Exception::Error(
-                           String::New(
-                               "An error has occured from Augeas API call, but no description available")));
+        Nan::ThrowError("An error has occured from Augeas API call, but no description available");
     }
 }
 
@@ -59,7 +57,7 @@ inline void throw_aug_error_msg(augeas *aug)
  */
 inline std::string memberToString(Handle<Object> obj, const char *key)
 {
-    Local<Value> m = obj->Get(Local<String>(String::New(key)));
+    Local<Value> m = obj->Get(Nan::New<String>(key).ToLocalChecked());
     if (!m->IsUndefined()) {
         String::Utf8Value str(m);
         return std::string(*str);
@@ -75,7 +73,7 @@ inline std::string memberToString(Handle<Object> obj, const char *key)
  */
 inline uint32_t memberToUint32(Handle<Object> obj, const char *key)
 {
-    Local<Value> m = obj->Get(Local<String>(String::New(key)));
+    Local<Value> m = obj->Get(Nan::New<String>(key).ToLocalChecked());
     if (!m->IsUndefined()) {
         return m->Uint32Value();
     } else {
@@ -113,35 +111,36 @@ protected:
     LibAugeas();
     ~LibAugeas();
 
-    static Persistent<FunctionTemplate> augeasTemplate;
-    static Persistent<Function> constructor;
+    static Nan::Persistent<FunctionTemplate> augeasTemplate;
+    static Nan::Persistent<Function> constructor;
 
-    static Handle<Value> defvar     (const Arguments& args);
-    static Handle<Value> defnode    (const Arguments& args);
-    static Handle<Value> get        (const Arguments& args);
-    static Handle<Value> set        (const Arguments& args);
-    static Handle<Value> setm       (const Arguments& args);
-    static Handle<Value> rm         (const Arguments& args);
-    static Handle<Value> mv         (const Arguments& args);
-    static Handle<Value> save       (const Arguments& args);
-    static Handle<Value> nmatch     (const Arguments& args);
-    static Handle<Value> match      (const Arguments& args);
-    static Handle<Value> load       (const Arguments& args);
-    static Handle<Value> srun       (const Arguments& args);
-    static Handle<Value> insertAfter  (const Arguments& args);
-    static Handle<Value> insertBefore (const Arguments& args);
-    static Handle<Value> error      (const Arguments& args);
-    static Handle<Value> errorMsg   (const Arguments& args);
-    static Handle<Value> errorLens  (const Arguments& args);
-    static Handle<Value> errorIncl  (const Arguments& args);
-    static Handle<Value> print      (const Arguments& args);
+    static NAN_METHOD(defvar);
+    static NAN_METHOD(defnode);
+    static NAN_METHOD(get);
+    static NAN_METHOD(set);
+    static NAN_METHOD(setm);
+    static NAN_METHOD(rm);
+    static NAN_METHOD(mv);
+    static NAN_METHOD(save);
+    static NAN_METHOD(nmatch);
+    static NAN_METHOD(match);
+    static NAN_METHOD(load);
+    static NAN_METHOD(srun);
+    static NAN_METHOD(insertAfter);
+    static NAN_METHOD(insertBefore);
+    static NAN_METHOD(error);
+    static NAN_METHOD(errorMsg);
+    static NAN_METHOD(errorLens);
+    static NAN_METHOD(errorIncl);
+    static NAN_METHOD(print);
 };
 
-Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
-Persistent<Function> LibAugeas::constructor;
+Nan::Persistent<FunctionTemplate> LibAugeas::augeasTemplate;
+Nan::Persistent<Function> LibAugeas::constructor;
 
 void LibAugeas::Init(Handle<Object> target)
 {
+    Nan::HandleScope scope;
     // flags for aug_init():
     NODE_DEFINE_CONSTANT(target, AUG_NONE);
     NODE_DEFINE_CONSTANT(target, AUG_SAVE_BACKUP);
@@ -169,12 +168,16 @@ void LibAugeas::Init(Handle<Object> target)
     NODE_DEFINE_CONSTANT(target, AUG_ECMDRUN);
     NODE_DEFINE_CONSTANT(target, AUG_EBADARG);
 
-    augeasTemplate = Persistent<FunctionTemplate>::New(FunctionTemplate::New());
-    augeasTemplate->SetClassName(String::NewSymbol("Augeas"));
-    augeasTemplate->InstanceTemplate()->SetInternalFieldCount(1);
+
+
+    Local<FunctionTemplate> localTemplate = Nan::New<v8::FunctionTemplate>();
+    augeasTemplate.Reset(localTemplate);
+    localTemplate->SetClassName(Nan::New<String>("Augeas").ToLocalChecked());
+    localTemplate->InstanceTemplate()->SetInternalFieldCount(1);
+
 
 // I do not want copy-n-paste errors here:
-#define _NEW_METHOD(m) NODE_SET_PROTOTYPE_METHOD(augeasTemplate, #m, m)
+#define _NEW_METHOD(m) Nan::SetPrototypeMethod(localTemplate, #m, m)
     _NEW_METHOD(defvar);
     _NEW_METHOD(defnode);
     _NEW_METHOD(get);
@@ -195,7 +198,7 @@ void LibAugeas::Init(Handle<Object> target)
     _NEW_METHOD(errorIncl);
     _NEW_METHOD(print);
 
-    constructor = Persistent<Function>::New(augeasTemplate->GetFunction());
+    constructor.Reset(localTemplate->GetFunction());
 }
 
 /*
@@ -207,7 +210,8 @@ Local<Object> LibAugeas::New(augeas *aug)
 {
     LibAugeas *obj = new LibAugeas();
     obj->m_aug = aug;
-    Local<Object> O = augeasTemplate->InstanceTemplate()->NewInstance();
+    Local<FunctionTemplate> localTemplate = Nan::New(augeasTemplate);
+    Local<Object> O = localTemplate->InstanceTemplate()->NewInstance();
     obj->Wrap(O);
     return O;
 }
@@ -223,18 +227,18 @@ Local<Object> LibAugeas::New(augeas *aug)
  * other than a nodeset, and the number of nodes if expr
  * evaluates to a nodeset
  */
-Handle<Value> LibAugeas::defvar(const Arguments& args)
+NAN_METHOD(LibAugeas::defvar)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() < 1 || args.Length() > 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() < 1 || info.Length() > 2) {
+        Nan::ThrowError("Wrong number of arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value n_str(args[0]);
-    String::Utf8Value e_str(args[1]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value n_str(info[0]);
+    String::Utf8Value e_str(info[1]);
 
     const char *name = *n_str;
     const char *expr = *e_str;
@@ -242,12 +246,12 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
     /* Returns -1 on error; on success, returns 0 if EXPR evaluates to anything
      * other than a nodeset, and the number of nodes if EXPR evaluates to a nodeset
      */
-    int rc = aug_defvar(obj->m_aug, name, args[1]->IsUndefined() ? NULL : expr);
+    int rc = aug_defvar(obj->m_aug, name, info[1]->IsUndefined() ? NULL : expr);
     if (-1 == rc) {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     } else {
-        return scope.Close(Number::New(rc));
+        info.GetReturnValue().Set(Nan::New<Number>(rc));
     }
 }
 
@@ -268,24 +272,24 @@ Handle<Value> LibAugeas::defvar(const Arguments& args)
  * The last argument could be a function. It will be called (synchronously)
  * with one argument set to True if a node was created, and False if it already existed.
  */
-Handle<Value> LibAugeas::defnode(const Arguments& args)
+NAN_METHOD(LibAugeas::defnode)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() < 2 || args.Length() > 4) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() < 2 || info.Length() > 4) {
+        Nan::ThrowError("Wrong number of arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value n_str(args[0]);
-    String::Utf8Value e_str(args[1]);
-    String::Utf8Value v_str(args[2]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value n_str(info[0]);
+    String::Utf8Value e_str(info[1]);
+    String::Utf8Value v_str(info[2]);
 
     const char *name = *n_str;
     const char *expr = *e_str;
     const char *value = NULL;
-    if (!args[2]->IsUndefined() && !args[2]->IsFunction()) {
+    if (!info[2]->IsUndefined() && !info[2]->IsFunction()) {
         value = *v_str;
     }
     int created;
@@ -297,38 +301,40 @@ Handle<Value> LibAugeas::defnode(const Arguments& args)
     int rc = aug_defnode(obj->m_aug, name, expr, value, &created);
     if (-1 == rc) {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     } else {
-        int last = args.Length() - 1;
-        if (args[last]->IsFunction()) {
-            Local<Function> cb =  Local<Function>::Cast(args[last]);
+        int last = info.Length() - 1;
+        if (info[last]->IsFunction()) {
+            Nan::Callback cb(Local<Function>::Cast(info[last]));
 
-            Local<Value> argv[] = {Local<Boolean>::New(Boolean::New(created == 1))};
+            Local<Value> argv[] = {
+                Nan::New<Boolean>(created == 1)
+            };
 
             TryCatch try_catch;
-            cb->Call(Context::GetCurrent()->Global(), 1, argv);
+            cb.Call(1, argv);
             if (try_catch.HasCaught()) {
-                node::FatalException(try_catch);
+                node::FatalException(v8::Isolate::GetCurrent(), try_catch);
             }
         }
-        return scope.Close(Number::New(rc));
+        info.GetReturnValue().Set(Nan::New<Number>(rc));
     }
 }
 
 /*
  * Wrapper of aug_get() - get exactly one value
  */
-Handle<Value> LibAugeas::get(const Arguments& args)
+NAN_METHOD(LibAugeas::get)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function accepts exactly one argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
 
     const char *path = *p_str; // operator*() returns C-string
     const char *value;
@@ -345,18 +351,18 @@ Handle<Value> LibAugeas::get(const Arguments& args)
     int rc = aug_get(obj->m_aug, path, &value);
     if (1 == rc) {
         if (NULL != value) {
-            return scope.Close(String::New(value));
+            info.GetReturnValue().Set(Nan::New<String>(value).ToLocalChecked());
         } else {
-            return scope.Close(Null());
+            Nan::Null();
         }
     } else if (0 == rc) {
-        return scope.Close(Undefined());
+        Nan::Undefined();
     } else if (rc < 0) {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     } else {
-        ThrowException(Exception::Error(String::New("Unexpected return value of aug_get()")));
-        return scope.Close(Undefined());
+        Nan::ThrowError("Unexpected return value of aug_get()");
+        Nan::Undefined();
     }
 }
 
@@ -365,18 +371,18 @@ Handle<Value> LibAugeas::get(const Arguments& args)
  * Note: this method (as aug_set) does not write any files,
  *       it just changes internal tree. To write files use LibAugeas::save()
  */
-Handle<Value> LibAugeas::set(const Arguments& args)
+NAN_METHOD(LibAugeas::set)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 2) {
+        Nan::ThrowError("Function accepts exactly two arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
-    String::Utf8Value v_str(args[1]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
+    String::Utf8Value v_str(info[1]);
 
     const char *path  = *p_str;
     const char *value = *v_str;
@@ -389,26 +395,26 @@ Handle<Value> LibAugeas::set(const Arguments& args)
     if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Wrapper of aug_setm() - set the value of multiple nodes in one operation
  * Returns the number of modified nodes on success.
  */
-Handle<Value> LibAugeas::setm(const Arguments& args)
+NAN_METHOD(LibAugeas::setm)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 3) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly three arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 3) {
+        Nan::ThrowError("Function accepts exactly three arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value b_str(args[0]);
-    String::Utf8Value s_str(args[1]);
-    String::Utf8Value v_str(args[2]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value b_str(info[0]);
+    String::Utf8Value s_str(info[1]);
+    String::Utf8Value v_str(info[2]);
 
     const char *base  = *b_str;
     const char *sub   = *s_str;
@@ -417,10 +423,10 @@ Handle<Value> LibAugeas::setm(const Arguments& args)
 
     int rc = aug_setm(obj->m_aug, base, sub, value);
     if (rc >= 0) {
-        return scope.Close(Int32::New(rc));
+        info.GetReturnValue().Set(Nan::New<Int32>(rc));
     } else {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     }
 }
 
@@ -430,26 +436,26 @@ Handle<Value> LibAugeas::setm(const Arguments& args)
  * Remove path and all its children. Returns the number of entries removed.
  * All nodes that match PATH, and their descendants, are removed.
  */
-Handle<Value> LibAugeas::rm(const Arguments& args)
+NAN_METHOD(LibAugeas::rm)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function accepts exactly one argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
 
-    const char *path  = *p_str;
+    const char *path = *p_str;
 
     int rc = aug_rm(obj->m_aug, path);
     if (rc >= 0) {
-        return scope.Close(Number::New(rc));
+        info.GetReturnValue().Set(Nan::New<Number>(rc));
     } else {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     }
 
 }
@@ -457,18 +463,18 @@ Handle<Value> LibAugeas::rm(const Arguments& args)
 /*
  * Wrapper of aug_mv() - move nodes
  */
-Handle<Value> LibAugeas::mv(const Arguments& args)
+NAN_METHOD(LibAugeas::mv)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 2) {
+        Nan::ThrowError("Function accepts exactly two arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value src(args[0]);
-    String::Utf8Value dst(args[1]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value src(info[0]);
+    String::Utf8Value dst(info[1]);
 
     const char *source = *src;
     const char *dest   = *dst;
@@ -481,24 +487,24 @@ Handle<Value> LibAugeas::mv(const Arguments& args)
     if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Wrapper of aug_insert(aug, path, label, 0) - insert 'label' after 'path'
  */
-Handle<Value> LibAugeas::insertAfter(const Arguments& args)
+NAN_METHOD(LibAugeas::insertAfter)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 2) {
+        Nan::ThrowError("Function accepts exactly two arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
-    String::Utf8Value l_str(args[1]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
+    String::Utf8Value l_str(info[1]);
 
     const char *path  = *p_str;
     const char *label = *l_str;
@@ -507,24 +513,24 @@ Handle<Value> LibAugeas::insertAfter(const Arguments& args)
     if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Wrapper of aug_insert(aug, path, label, 1) - insert 'label' before 'path'
  */
-Handle<Value> LibAugeas::insertBefore(const Arguments& args)
+NAN_METHOD(LibAugeas::insertBefore)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 2) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly two arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 2) {
+        Nan::ThrowError("Function accepts exactly two arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
-    String::Utf8Value l_str(args[1]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
+    String::Utf8Value l_str(info[1]);
 
     const char *path  = *p_str;
     const char *label = *l_str;
@@ -533,111 +539,112 @@ Handle<Value> LibAugeas::insertBefore(const Arguments& args)
     if (AUG_NOERROR != rc) {
         throw_aug_error_msg(obj->m_aug);
     }
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Wrapper of aug_error()
  * Returns the error code from the last API call
  */
-Handle<Value> LibAugeas::error(const Arguments& args)
+NAN_METHOD(LibAugeas::error)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 0) {
-        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 0) {
+        Nan::ThrowError("Function does not accept arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
     int rc = aug_error(obj->m_aug);
-    return scope.Close(Int32::New(rc));
+    info.GetReturnValue().Set(Nan::New<Int32>(rc));
 }
 
 /*
  * Returns the error message from the last API call,
  * including all details.
  */
-Handle<Value> LibAugeas::errorMsg(const Arguments& args)
+NAN_METHOD(LibAugeas::errorMsg)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 0) {
-        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 0) {
+        Nan::ThrowError("Function does not accept arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
-    return scope.Close(String::New(aug_error_msg(obj->m_aug).c_str()));
+    info.GetReturnValue().Set(Nan::New<String>(aug_error_msg(obj->m_aug)).ToLocalChecked());
 }
 
 /*
  * Returns the lens load error message
  */
-Handle<Value> LibAugeas::errorLens(const Arguments& args)
+NAN_METHOD(LibAugeas::errorLens)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
     const char *val;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function expects lens argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function expects lens argument");
+        Nan::Undefined();
     }
-    String::Utf8Value lens(args[0]);
+    String::Utf8Value lens(info[0]);
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
     std::string errPath = "/augeas/load/" + std::string(*lens) + "/error";
-    if (aug_get(obj->m_aug, errPath.c_str(), &val))
-        return scope.Close(String::New(val));
+    if (aug_get(obj->m_aug, errPath.c_str(), &val)) {
+        info.GetReturnValue().Set(Nan::New<String>(val).ToLocalChecked());
+    }
 
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Returns the incl parsed error message
  */
-Handle<Value> LibAugeas::errorIncl(const Arguments& args)
+NAN_METHOD(LibAugeas::errorIncl)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
     int mres;
     const char *val;
     char **matches;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function expects incl argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function expects incl argument");
+        Nan::Undefined();
     }
-    String::Utf8Value incl(args[0]);
+    String::Utf8Value incl(info[0]);
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
     std::string errPath = "/augeas/files" + std::string(*incl) + "/error";
     mres = aug_match(obj->m_aug, errPath.c_str(), &matches);
     if (mres) {
-        Local<Object> res = Object::New();
+        Local<Object> res = Nan::New<Object>();
 
         if (aug_get(obj->m_aug, std::string(errPath + "/line").c_str(), &val)) {
-            res->Set(Local<String>::New(String::New("line")),
-                     Local<String>::New(String::New(val)));
+            res->Set(Nan::New<String>("line").ToLocalChecked(),
+                     Nan::New<String>(val).ToLocalChecked());
         }
         if (aug_get(obj->m_aug,
                     std::string(errPath + "/message").c_str(), &val)) {
-            res->Set(Local<String>::New(String::New("message")),
-                     Local<String>::New(String::New(val)));
+            res->Set(Nan::New<String>("message").ToLocalChecked(),
+                     Nan::New<String>(val).ToLocalChecked());
         }
         free(matches);
-        return scope.Close(res);
+        info.GetReturnValue().Set(res);
     }
 
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 struct SaveUV {
     uv_work_t request;
-    Persistent<Function> callback;
+    Nan::Callback callback;
     augeas *aug;
     int rc; // = aug_save(), 0 on success, -1 on error
 };
@@ -653,19 +660,20 @@ void saveWork(uv_work_t *req)
  */
 void saveAfter(uv_work_t* req)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
     SaveUV *suv = static_cast<SaveUV*>(req->data);
-    Local<Value> argv[] = {Int32::New(suv->rc)};
+    Local<Value> argv[] = {
+        Nan::New<Int32>(suv->rc)
+    };
 
     TryCatch try_catch;
-    suv->callback->Call(Context::GetCurrent()->Global(), 1, argv);
+    suv->callback.Call(1, argv);
     if (try_catch.HasCaught()) {
-        node::FatalException(try_catch);
+        node::FatalException(v8::Isolate::GetCurrent(), try_catch);
     }
 
-    suv->callback.Dispose();
-    delete suv;
+
 }
 
 /*
@@ -686,31 +694,30 @@ void saveAfter(uv_work_t* req)
  *
  * Always returns undefined.
  */
-Handle<Value> LibAugeas::save(const Arguments& args)
+NAN_METHOD(LibAugeas::save)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
-    // if no args, save files synchronously (blocking):
-    if (args.Length() == 0) {
+    // if no info, save files synchronously (blocking):
+    if (info.Length() == 0) {
         int rc = aug_save(obj->m_aug);
         if (AUG_NOERROR != rc) {
-            ThrowException(Exception::Error(String::New("Failed to write files")));
+            Nan::ThrowError("Failed to write files");
         }
         // single argument is a function - async:
-    } else if ((args.Length() == 1) && args[0]->IsFunction()) {
+    } else if ((info.Length() == 1) && info[0]->IsFunction()) {
         SaveUV * suv = new SaveUV();
         suv->request.data = suv;
         suv->aug = obj->m_aug;
-        suv->callback = Persistent<Function>::New(
-                            Local<Function>::Cast(args[0]));
+        suv->callback.SetFunction(Local<Function>::Cast(info[0]));
         uv_queue_work(uv_default_loop(), &suv->request, saveWork, (uv_after_work_cb) saveAfter);
     } else {
-        ThrowException(Exception::Error(String::New("Callback function or nothing")));
+        Nan::ThrowError("Callback function or nothing");
     }
 
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
@@ -719,26 +726,26 @@ Handle<Value> LibAugeas::save(const Arguments& args)
  * Note: aug_match() allocates memory if the third argument is not NULL,
  * in this function we always set it to NULL and get only number of found nodes.
  */
-Handle<Value> LibAugeas::nmatch(const Arguments& args)
+NAN_METHOD(LibAugeas::nmatch)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function accepts exactly one argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
 
     const char *path  = *p_str;
 
     int rc = aug_match(obj->m_aug, path, NULL);
     if (rc >= 0) {
-        return scope.Close(Number::New(rc));
+        info.GetReturnValue().Set(Nan::New<Number>(rc));
     } else {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     }
 }
 
@@ -746,35 +753,35 @@ Handle<Value> LibAugeas::nmatch(const Arguments& args)
  * Wrapper of aug_match(, , non-NULL).
  * Returns an array of nodes matching given path expression
  */
-Handle<Value> LibAugeas::match(const Arguments& args)
+NAN_METHOD(LibAugeas::match)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function accepts exactly one argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value p_str(args[0]);
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value p_str(info[0]);
 
     const char *path  = *p_str;
     char **matches = NULL;
 
     int rc = aug_match(obj->m_aug, path, &matches);
     if (rc >= 0) {
-        Local<Array> result = Array::New(rc);
+        Local<Array> result = Nan::New<Array>(rc);
         if (NULL != matches) {
             for (int i = 0; i < rc; ++i) {
-                result->Set(Number::New(i), String::New(matches[i]));
+                result->Set(Nan::New<Number>(i), Nan::New<String>(matches[i]).ToLocalChecked());
                 free(matches[i]);
             }
             free(matches);
         }
-        return scope.Close(result);
+        info.GetReturnValue().Set(result);
     } else {
         throw_aug_error_msg(obj->m_aug);
-        return scope.Close(Undefined());
+        Nan::Undefined();
     }
 }
 
@@ -782,18 +789,18 @@ Handle<Value> LibAugeas::match(const Arguments& args)
  * Wrapper of aug_print().
  * Returns an object of key/value matching given path expression
  */
-Handle<Value> LibAugeas::print(const Arguments& args)
+NAN_METHOD(LibAugeas::print)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function expects incl argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function expects incl argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
-    String::Utf8Value incl(args[0]);
-    Local<Object> res = Object::New();
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
+    String::Utf8Value incl(info[0]);
+    Local<Object> res = Nan::New<Object>();
 
     std::string matchPath = "/files" + std::string(*incl) + "/*";
     FILE *out = tmpfile();
@@ -818,31 +825,31 @@ Handle<Value> LibAugeas::print(const Arguments& args)
             // remove '"' sign from around value
             value.erase(value.begin());
             value.erase(value.end() - 1);
-            res->Set(Local<String>::New(String::New(key.c_str())),
-                     Local<String>::New(String::New(value.c_str())));
+            res->Set(Nan::New<String>(key).ToLocalChecked(),
+                     Nan::New<String>(value).ToLocalChecked());
         }
 
         fclose(out);
-        return scope.Close(res);
+        info.GetReturnValue().Set(res);
     }
 
     fclose(out);
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
  * Wrapper of aug_load() - load /files
  */
-Handle<Value> LibAugeas::load(const Arguments& args)
+NAN_METHOD(LibAugeas::load)
 {
-    HandleScope scope;
+   Nan::HandleScope scope;
 
-    if (args.Length() != 0) {
-        ThrowException(Exception::TypeError(String::New("Function does not accept arguments")));
-        return scope.Close(Undefined());
+    if (info.Length() != 0) {
+        Nan::ThrowError("Function does not accept arguments");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
     /*
      * aug_load() returns -1 on error, 0 on success. Success includes the case
@@ -851,10 +858,10 @@ Handle<Value> LibAugeas::load(const Arguments& args)
      */
     int rc = aug_load(obj->m_aug);
     if (AUG_NOERROR != rc) {
-        ThrowException(Exception::Error(String::New("Failed to load files")));
+        Nan::ThrowError("Failed to load files");
     }
 
-    return scope.Close(Undefined());
+    Nan::Undefined();
 }
 
 /*
@@ -864,23 +871,23 @@ Handle<Value> LibAugeas::load(const Arguments& args)
  * Arguments:
  * string or array of strings
  */
-Handle<Value> LibAugeas::srun(const Arguments& args)
+NAN_METHOD(LibAugeas::srun)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
-    if (args.Length() != 1) {
-        ThrowException(Exception::TypeError(String::New("Function accepts exactly one argument")));
-        return scope.Close(Undefined());
+    if (info.Length() != 1) {
+        Nan::ThrowError("Function accepts exactly one argument");
+        Nan::Undefined();
     }
 
-    LibAugeas *obj = ObjectWrap::Unwrap<LibAugeas>(args.This());
+    LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
     std::string text;
 
-    if (args[0]->IsArray()) {
-        text = join(Local<Array>::Cast(args[0]));
+    if (info[0]->IsArray()) {
+        text = join(Local<Array>::Cast(info[0]));
     } else {
-        String::Utf8Value t_str(args[0]);
+        String::Utf8Value t_str(info[0]);
         text = *t_str;
     }
 
@@ -891,31 +898,34 @@ Handle<Value> LibAugeas::srun(const Arguments& args)
      */
     int rc = aug_srun(obj->m_aug, NULL, text.c_str());
     if (rc >= 0) {
-        return scope.Close(Number::New(rc));
+        info.GetReturnValue().Set(Nan::New<Number>(rc));
     } else if (-1 == rc) {
         throw_aug_error_msg(obj->m_aug);
     } else if (-2 == rc) {
-        ThrowException(Exception::Error(String::New("'quit' command was encountered")));
+        Nan::ThrowError("'quit' command was encountered");
     } else {
-        ThrowException(Exception::Error(String::New("Unexpected return code from aug_srun()")));
+        Nan::ThrowError("Unexpected return code from aug_srun()");
     }
-    return scope.Close(Undefined());
+
+   Nan::Undefined();
 }
 
 
 LibAugeas::LibAugeas() : m_aug(NULL)
 {
+
 }
 
 LibAugeas::~LibAugeas()
 {
+
     aug_close(m_aug);
 }
 
 
 struct CreateAugeasUV {
     uv_work_t request;
-    Persistent<Function> callback;
+    Nan::Callback callback;
     std::string root;
     std::string loadpath;
     std::string lens;
@@ -999,18 +1009,19 @@ void createAugeasWork(uv_work_t *req)
 
 void createAugeasAfter(uv_work_t* req)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
     CreateAugeasUV *her = static_cast<CreateAugeasUV*>(req->data);
-    Local<Value> argv[] = {LibAugeas::New(her->aug)};
+    Local<Value> argv[] = {
+        LibAugeas::New(her->aug)
+    };
 
     TryCatch try_catch;
-    her->callback->Call(Context::GetCurrent()->Global(), 1, argv);
+    her->callback.Call(1, argv);
     if (try_catch.HasCaught()) {
-        node::FatalException(try_catch);
+        node::FatalException(v8::Isolate::GetCurrent(), try_catch);
     }
 
-    her->callback.Dispose();
     delete her;
 }
 
@@ -1025,9 +1036,9 @@ void createAugeasAfter(uv_work_t* req)
  * var aug = augeas.createAugeas([...]) - sync
  *
  */
-Handle<Value> createAugeas(const Arguments& args)
+NAN_METHOD(createAugeas)
 {
-    HandleScope scope;
+    Nan::HandleScope scope;
 
     // options for aug_init(root, loadpath, flags):
     std::string root;
@@ -1035,23 +1046,23 @@ Handle<Value> createAugeas(const Arguments& args)
     unsigned int flags = 0;
 
     // Allow passing options as an JS object:
-    if (args[0]->IsObject()) {
-        Local<Object> obj = args[0]->ToObject();
+    if (info[0]->IsObject()) {
+        Local<Object> obj = info[0]->ToObject();
         root     = memberToString(obj, "root");
         loadpath = memberToString(obj, "loadpath");
         flags    = memberToUint32(obj, "flags");
     } else {
         // C-like way:
-        if (args[0]->IsString()) {
-            String::Utf8Value p_str(args[0]);
+        if (info[0]->IsString()) {
+            String::Utf8Value p_str(info[0]);
             root = *p_str;
         }
-        if (args[1]->IsString()) {
-            String::Utf8Value l_str(args[1]);
+        if (info[1]->IsString()) {
+            String::Utf8Value l_str(info[1]);
             loadpath = *l_str;
         }
-        if (args[2]->IsNumber()) {
-            flags = args[2]->Uint32Value();
+        if (info[2]->IsNumber()) {
+            flags = info[2]->Uint32Value();
         }
     }
 
@@ -1062,26 +1073,25 @@ Handle<Value> createAugeas(const Arguments& args)
      * If the last argument is a function, create augeas
      * in an async way, and then pass it to that function.
      */
-    bool async = (args.Length() > 0) && (args[args.Length()-1]->IsFunction());
+    bool async = (info.Length() > 0) && (info[info.Length()-1]->IsFunction());
 
     if (async) {
         CreateAugeasUV *her = new CreateAugeasUV();
         her->request.data = her;
-        her->callback = Persistent<Function>::New(
-                            Local<Function>::Cast(args[args.Length()-1]));
+        her->callback.SetFunction(Local<Function>::Cast(info[info.Length()-1]));
 
         her->root = root;
         her->loadpath = loadpath;
         her->flags = flags;
 
         // Extra options for async mode:
-        if (args[0]->IsObject()) {
-            Local<Object> obj = args[0]->ToObject();
+        if (info[0]->IsObject()) {
+            Local<Object> obj = info[0]->ToObject();
             her->lens = memberToString(obj, "lens");
             her->incl = memberToString(obj, "incl");
             her->excl = memberToString(obj, "excl");
 
-            Local<Value> srun = obj->Get(Local<String>(String::New("srun")));
+            Local<Value> srun = obj->Get(Nan::New<String>("srun").ToLocalChecked());
             if (srun->IsArray()) {
                 her->srun = join(Local<Array>::Cast(srun));
             } else {
@@ -1092,22 +1102,21 @@ Handle<Value> createAugeas(const Arguments& args)
         uv_queue_work(uv_default_loop(), &her->request,
                       createAugeasWork, (uv_after_work_cb) createAugeasAfter);
 
-        return scope.Close(Undefined());
+        Nan::Undefined();
     } else { // sync
 
         augeas *aug = aug_init(root.c_str(), loadpath.c_str(), flags);
 
         if (NULL == aug) { // should not happen due to AUG_NO_ERR_CLOSE
-            ThrowException(Exception::Error(
-                               String::New("aug_init() badly failed: it should not return NULL, but it did.")));
-            return scope.Close(Undefined());
+            Nan::ThrowError("aug_init() badly failed: it should not return NULL, but it did.");
+            Nan::Undefined();
         } else if (AUG_NOERROR != aug_error(aug)) {
             throw_aug_error_msg(aug);
             aug_close(aug);
-            return scope.Close(Undefined());
+            Nan::Undefined();
         }
 
-        return scope.Close(LibAugeas::New(aug));
+        info.GetReturnValue().Set(LibAugeas::New(aug));
     }
 }
 
@@ -1117,8 +1126,8 @@ void init(Handle<Object> target)
 {
     LibAugeas::Init(target);
 
-    target->Set(String::NewSymbol("createAugeas"),
-                FunctionTemplate::New(createAugeas)->GetFunction());
+    target->Set(Nan::New<String>("createAugeas").ToLocalChecked(),
+                Nan::New<FunctionTemplate>(createAugeas)->GetFunction());
 }
 
 NODE_MODULE(augeas, init)

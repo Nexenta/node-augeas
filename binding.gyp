@@ -13,6 +13,7 @@
             ],
           }, {
             'include_dirs': [
+                "<!(node -e \"require('nan')\")",
                 '/usr/include/libxml2'
             ],
           }
