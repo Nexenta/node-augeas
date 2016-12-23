@@ -638,6 +638,7 @@ void saveAfter(uv_work_t *req) {
 
     TryCatch try_catch;
     suv->callback.Call(1, argv);
+    delete suv;
     if (try_catch.HasCaught()) {
         node::FatalException(v8::Isolate::GetCurrent(), try_catch);
     }
@@ -970,11 +971,10 @@ void createAugeasAfter(uv_work_t *req) {
 
     TryCatch try_catch;
     her->callback.Call(1, argv);
+    delete her;
     if (try_catch.HasCaught()) {
         node::FatalException(v8::Isolate::GetCurrent(), try_catch);
     }
-
-    delete her;
 }
 
 /*
