@@ -12,5 +12,7 @@
     ],
     "scripts":{"preinstall": "node-gyp clean configure build"},
     "lib": ".",
-    "dependencies": {}
+    "dependencies": {
+        "nan": "^2.12.1"
+    }
 }

@@ -297,10 +297,10 @@ NAN_METHOD(LibAugeas::defnode) {
 
             Local<Value> argv[] = { Nan::New<Boolean>(created == 1) };
 
-            TryCatch try_catch;
+            Nan::TryCatch try_catch;
             cb.Call(1, argv);
             if (try_catch.HasCaught()) {
-                node::FatalException(v8::Isolate::GetCurrent(), try_catch);
+                Nan::FatalException(try_catch);
             }
         }
         info.GetReturnValue().Set(Nan::New<Number>(rc));
@@ -636,11 +636,11 @@ void saveAfter(uv_work_t *req) {
     SaveUV *suv = static_cast<SaveUV *>(req->data);
     Local<Value> argv[] = { Nan::New<Int32>(suv->rc) };
 
-    TryCatch try_catch;
+    Nan::TryCatch try_catch;
     suv->callback.Call(1, argv);
     delete suv;
     if (try_catch.HasCaught()) {
-        node::FatalException(v8::Isolate::GetCurrent(), try_catch);
+        Nan::FatalException(try_catch);
     }
 }
 
@@ -969,11 +969,11 @@ void createAugeasAfter(uv_work_t *req) {
     CreateAugeasUV *her = static_cast<CreateAugeasUV *>(req->data);
     Local<Value> argv[] = { LibAugeas::New(her->aug) };
 
-    TryCatch try_catch;
+    Nan::TryCatch try_catch;
     her->callback.Call(1, argv);
     delete her;
     if (try_catch.HasCaught()) {
-        node::FatalException(v8::Isolate::GetCurrent(), try_catch);
+        Nan::FatalException(try_catch);
     }
 }
 
