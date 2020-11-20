@@ -22,6 +22,16 @@ extern "C" { // Yes, that bad
 }
 
 using namespace v8;
+template<class T>
+using Handle = v8::Local<T>;
+
+inline v8::Isolate *isol() {
+    return v8::Isolate::GetCurrent();
+}
+
+inline v8::Local<v8::Context> ctx() {
+    return v8::Isolate::GetCurrent()->GetCurrentContext();
+}
 
 inline std::string aug_error_msg(augeas *aug) {
     std::string msg = aug_error_message(aug);
@@ -53,9 +63,9 @@ inline void throw_aug_error_msg(augeas *aug) {
  * Returns empty string if memder does not exist.
  */
 inline std::string memberToString(Handle<Object> obj, const char *key) {
-    Local<Value> m = obj->Get(Nan::New<String>(key).ToLocalChecked());
+    Local<Value> m = obj->Get(ctx(), Nan::New<String>(key).ToLocalChecked()).ToLocalChecked();
     if (!m->IsUndefined()) {
-        String::Utf8Value str(m);
+        String::Utf8Value str(isol(), m);
         return std::string(*str);
     } else {
         return std::string();
@@ -68,9 +78,9 @@ inline std::string memberToString(Handle<Object> obj, const char *key) {
  * Returns 0 if memder does not exist.
  */
 inline uint32_t memberToUint32(Handle<Object> obj, const char *key) {
-    Local<Value> m = obj->Get(Nan::New<String>(key).ToLocalChecked());
+    Local<Value> m = obj->Get(ctx(), Nan::New<String>(key).ToLocalChecked()).ToLocalChecked();
     if (!m->IsUndefined()) {
-        return m->Uint32Value();
+        return m->Uint32Value(ctx()).ToChecked();
     } else {
         return 0;
     }
@@ -85,11 +95,11 @@ inline std::string join(Local<Array> a) {
     uint32_t len = a->Length();
     if (len > 0) {
         for (uint32_t i = 0; i < len - 1; ++i) {
-            String::Utf8Value v(a->Get(i));
+            String::Utf8Value v(isol(), a->Get(ctx(), i).ToLocalChecked());
             res.append(*v);
             res.append("\n");
         }
-        String::Utf8Value v(a->Get(len - 1));
+        String::Utf8Value v(isol(), a->Get(ctx(), len - 1).ToLocalChecked());
         res.append(*v);
     }
     return res;
@@ -188,7 +198,7 @@ void LibAugeas::Init(Handle<Object> target) {
     _NEW_METHOD(errorIncl);
     _NEW_METHOD(print);
 
-    constructor.Reset(localTemplate->GetFunction());
+    constructor.Reset(localTemplate->GetFunction(ctx()).ToLocalChecked());
 }
 
 /*
@@ -200,7 +210,7 @@ Local<Object> LibAugeas::New(augeas *aug) {
     LibAugeas *obj = new LibAugeas();
     obj->m_aug = aug;
     Local<FunctionTemplate> localTemplate = Nan::New(augeasTemplate);
-    Local<Object> O = localTemplate->InstanceTemplate()->NewInstance();
+    Local<Object> O = localTemplate->InstanceTemplate()->NewInstance(ctx()).ToLocalChecked();
     obj->Wrap(O);
     return O;
 }
@@ -224,8 +234,8 @@ NAN_METHOD(LibAugeas::defvar) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value n_str(info[0]);
-    String::Utf8Value e_str(info[1]);
+    String::Utf8Value n_str(isol(), info[0]);
+    String::Utf8Value e_str(isol(), info[1]);
 
     const char *name = *n_str;
     const char *expr = *e_str;
@@ -270,9 +280,9 @@ NAN_METHOD(LibAugeas::defnode) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value n_str(info[0]);
-    String::Utf8Value e_str(info[1]);
-    String::Utf8Value v_str(info[2]);
+    String::Utf8Value n_str(isol(), info[0]);
+    String::Utf8Value e_str(isol(), info[1]);
+    String::Utf8Value v_str(isol(), info[2]);
 
     const char *name = *n_str;
     const char *expr = *e_str;
@@ -319,7 +329,7 @@ NAN_METHOD(LibAugeas::get) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
+    String::Utf8Value p_str(isol(), info[0]);
 
     const char *path = *p_str; // operator*() returns C-string
     const char *value;
@@ -365,8 +375,8 @@ NAN_METHOD(LibAugeas::set) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
-    String::Utf8Value v_str(info[1]);
+    String::Utf8Value p_str(isol(), info[0]);
+    String::Utf8Value v_str(isol(), info[1]);
 
     const char *path = *p_str;
     const char *value = *v_str;
@@ -395,9 +405,9 @@ NAN_METHOD(LibAugeas::setm) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value b_str(info[0]);
-    String::Utf8Value s_str(info[1]);
-    String::Utf8Value v_str(info[2]);
+    String::Utf8Value b_str(isol(), info[0]);
+    String::Utf8Value s_str(isol(), info[1]);
+    String::Utf8Value v_str(isol(), info[2]);
 
     const char *base = *b_str;
     const char *sub = *s_str;
@@ -426,7 +436,7 @@ NAN_METHOD(LibAugeas::rm) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
+    String::Utf8Value p_str(isol(), info[0]);
 
     const char *path = *p_str;
 
@@ -451,8 +461,8 @@ NAN_METHOD(LibAugeas::mv) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value src(info[0]);
-    String::Utf8Value dst(info[1]);
+    String::Utf8Value src(isol(), info[0]);
+    String::Utf8Value dst(isol(), info[1]);
 
     const char *source = *src;
     const char *dest = *dst;
@@ -480,8 +490,8 @@ NAN_METHOD(LibAugeas::insertAfter) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
-    String::Utf8Value l_str(info[1]);
+    String::Utf8Value p_str(isol(), info[0]);
+    String::Utf8Value l_str(isol(), info[1]);
 
     const char *path = *p_str;
     const char *label = *l_str;
@@ -505,8 +515,8 @@ NAN_METHOD(LibAugeas::insertBefore) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
-    String::Utf8Value l_str(info[1]);
+    String::Utf8Value p_str(isol(), info[0]);
+    String::Utf8Value l_str(isol(), info[1]);
 
     const char *path = *p_str;
     const char *label = *l_str;
@@ -565,7 +575,7 @@ NAN_METHOD(LibAugeas::errorLens) {
         Nan::ThrowError("Function expects lens argument");
         Nan::Undefined();
     }
-    String::Utf8Value lens(info[0]);
+    String::Utf8Value lens(isol(), info[0]);
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
@@ -590,7 +600,7 @@ NAN_METHOD(LibAugeas::errorIncl) {
         Nan::ThrowError("Function expects incl argument");
         Nan::Undefined();
     }
-    String::Utf8Value incl(info[0]);
+    String::Utf8Value incl(isol(), info[0]);
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
 
@@ -600,12 +610,12 @@ NAN_METHOD(LibAugeas::errorIncl) {
         Local<Object> res = Nan::New<Object>();
 
         if (aug_get(obj->m_aug, std::string(errPath + "/line").c_str(), &val)) {
-            res->Set(Nan::New<String>("line").ToLocalChecked(),
+            res->Set(ctx(), Nan::New<String>("line").ToLocalChecked(),
                      Nan::New<String>(val).ToLocalChecked());
         }
         if (aug_get(obj->m_aug, std::string(errPath + "/message").c_str(),
                     &val)) {
-            res->Set(Nan::New<String>("message").ToLocalChecked(),
+            res->Set(ctx(), Nan::New<String>("message").ToLocalChecked(),
                      Nan::New<String>(val).ToLocalChecked());
         }
         free(matches);
@@ -704,7 +714,7 @@ NAN_METHOD(LibAugeas::nmatch) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
+    String::Utf8Value p_str(isol(), info[0]);
 
     const char *path = *p_str;
 
@@ -730,7 +740,7 @@ NAN_METHOD(LibAugeas::match) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value p_str(info[0]);
+    String::Utf8Value p_str(isol(), info[0]);
 
     const char *path = *p_str;
     char **matches = NULL;
@@ -740,7 +750,7 @@ NAN_METHOD(LibAugeas::match) {
         Local<Array> result = Nan::New<Array>(rc);
         if (NULL != matches) {
             for (int i = 0; i < rc; ++i) {
-                result->Set(Nan::New<Number>(i),
+                result->Set(ctx(), Nan::New<Number>(i),
                             Nan::New<String>(matches[i]).ToLocalChecked());
                 free(matches[i]);
             }
@@ -766,7 +776,7 @@ NAN_METHOD(LibAugeas::print) {
     }
 
     LibAugeas *obj = node::ObjectWrap::Unwrap<LibAugeas>(info.This());
-    String::Utf8Value incl(info[0]);
+    String::Utf8Value incl(isol(), info[0]);
     Local<Object> res = Nan::New<Object>();
 
     std::string matchPath = "/files" + std::string(*incl) + "/*";
@@ -793,7 +803,8 @@ NAN_METHOD(LibAugeas::print) {
             // remove '"' sign from around value
             value.erase(value.begin());
             value.erase(value.end() - 1);
-            res->Set(Nan::New<String>(key).ToLocalChecked(),
+            res->Set(ctx(),
+                     Nan::New<String>(key).ToLocalChecked(),
                      Nan::New<String>(value).ToLocalChecked());
         }
 
@@ -853,7 +864,7 @@ NAN_METHOD(LibAugeas::srun) {
     if (info[0]->IsArray()) {
         text = join(Local<Array>::Cast(info[0]));
     } else {
-        String::Utf8Value t_str(info[0]);
+        String::Utf8Value t_str(isol(), info[0]);
         text = *t_str;
     }
 
@@ -998,22 +1009,22 @@ NAN_METHOD(createAugeas) {
 
     // Allow passing options as an JS object:
     if (info[0]->IsObject()) {
-        Local<Object> obj = info[0]->ToObject();
+        Local<Object> obj = info[0]->ToObject(ctx()).ToLocalChecked();
         root = memberToString(obj, "root");
         loadpath = memberToString(obj, "loadpath");
         flags = memberToUint32(obj, "flags");
     } else {
         // C-like way:
         if (info[0]->IsString()) {
-            String::Utf8Value p_str(info[0]);
+            String::Utf8Value p_str(isol(), info[0]);
             root = *p_str;
         }
         if (info[1]->IsString()) {
-            String::Utf8Value l_str(info[1]);
+            String::Utf8Value l_str(isol(), info[1]);
             loadpath = *l_str;
         }
         if (info[2]->IsNumber()) {
-            flags = info[2]->Uint32Value();
+            flags = info[2]->Uint32Value(ctx()).ToChecked();
         }
     }
 
@@ -1038,13 +1049,13 @@ NAN_METHOD(createAugeas) {
 
         // Extra options for async mode:
         if (info[0]->IsObject()) {
-            Local<Object> obj = info[0]->ToObject();
+            Local<Object> obj = info[0]->ToObject(ctx()).ToLocalChecked();
             her->lens = memberToString(obj, "lens");
             her->incl = memberToString(obj, "incl");
             her->excl = memberToString(obj, "excl");
 
             Local<Value> srun =
-                obj->Get(Nan::New<String>("srun").ToLocalChecked());
+                obj->Get(ctx(), Nan::New<String>("srun").ToLocalChecked()).ToLocalChecked();
             if (srun->IsArray()) {
                 her->srun = join(Local<Array>::Cast(srun));
             } else {
@@ -1077,8 +1088,9 @@ NAN_METHOD(createAugeas) {
 void init(Handle<Object> target) {
     LibAugeas::Init(target);
 
-    target->Set(Nan::New<String>("createAugeas").ToLocalChecked(),
-                Nan::New<FunctionTemplate>(createAugeas)->GetFunction());
+    target->Set(ctx(),
+		Nan::New<String>("createAugeas").ToLocalChecked(),
+                Nan::New<FunctionTemplate>(createAugeas)->GetFunction(ctx()).ToLocalChecked());
 }
 
 NODE_MODULE(augeas, init)
