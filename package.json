@@ -1,6 +1,6 @@
 {
     "name": "libaugeas",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Bindings to augeas configuration tool",
     "url": "http://github.com/neurobashing/node-augeas",
     "keywords": ["parser", "configuration", "puppet", "chef"],
@@ -13,6 +13,6 @@
     "scripts":{"preinstall": "node-gyp clean configure build"},
     "lib": ".",
     "dependencies": {
-        "nan": "^2.12.1"
+        "nan": "^2.17.0"
     }
 }
